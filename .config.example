@@ -1,0 +1,112 @@
+# =========================================================
+# n8n Git Configuration File Example
+# =========================================================
+# Copy this file to any of these locations:
+#   1. ./.config (local, project-specific) - highest priority
+#   2. ~/.config/n8n-git/config (user-specific)
+#   3. Custom path via --config option
+#
+# All settings are optional except for required GitHub settings for remote operations
+# This file should be added to .gitignore for security when used locally
+
+# === REQUIRED SETTINGS (for remote operations) ===
+# GitHub Personal Access Token for repository access
+GITHUB_TOKEN="ghp_1234567890abcdef1234567890abcdef12345678"
+
+# GitHub repository in format: username/repository  
+GITHUB_REPO="myuser/n8n-backup"
+
+# n8n container ID or name to push/pull (defaults to "n8n" if left unset)
+N8N_CONTAINER="n8n-container-name"
+
+# === OPTIONAL GITHUB SETTINGS ===
+# GitHub branch to use (defaults to 'main')
+GITHUB_BRANCH="main"
+
+# Optional: prefix within the repository where workflows are stored, or retrieved from (e.g., "myvps" or "prod/env")
+# Supports dynamic tokens such as %DATE%, %YYYY%, %YY%, %MM%, %DD%, %HH%, %mm%, %ss%, %HOSTNAME%, %PERSONAL_PROJECT%, and %PROJECT%.
+# Leave unset to organize workflows and folders at the repository root
+GITHUB_PATH="%PROJECT%/"
+
+# Git commit identity used for automated backups (optional)
+# Defaults to "n8n Git Manager" and backup@<base domain of N8N_BASE_URL>
+# GIT_COMMIT_NAME="n8n Git Manager"
+# GIT_COMMIT_EMAIL="backup@example.com"
+
+# === BACKUP BEHAVIOR SETTINGS ===
+
+# Optional: N8N project name to push from or pull into.
+# Leave unset to default to the %PERSONAL_PROJECT% personal project reported by n8n.
+# N8N_PROJECT="%PERSONAL_PROJECT%"
+
+# Optional: the target location in n8n to push from or pull into.
+# Leave unset to default to the project root.
+# N8N_PATH="clients/acme"
+
+
+# Workflows backup mode: 0/disabled, 1/local, or 2/remote
+# Both numeric (0/1/2) and descriptive (disabled/local/remote) values are supported
+# - 0/disabled: Skip workflow backup entirely
+# - 1/local: Store workflows in local secure storage only
+# - 2/remote: Store workflows in Git repository (shareable but less secure)
+WORKFLOWS=1
+
+# Credentials backup mode: 0/disabled, 1/local, or 2/remote
+# Both numeric (0/1/2) and descriptive (disabled/local/remote) values are supported
+# - 0/disabled: Skip credential backup entirely  
+# - 1/local: Store credentials in local secure storage only (recommended)
+# - 2/remote: Store credentials in Git repository (use with caution for security)
+CREDENTIALS=1
+
+# Environment backup mode: 0/disabled (default), 1/local, or 2/remote
+# - 0/disabled: Skip environment variable capture entirely
+# - 1/local: Store environment variables in local secure storage
+# - 2/remote: Store environment variables in Git repository (not recommended)
+ENVIRONMENT=0
+
+# Decrypt credentials during push/export (true/false). KEEP THIS FALSE unless you fully trust every destination.
+# Setting true writes plaintext secrets to disk and especially to Git; treat public repositories as immediate credential leaks.
+DECRYPT_CREDENTIALS=false
+
+# === LOCAL BACKUP SETTINGS ===
+# Custom local backup directory path (defaults to ~/n8n-backup)
+LOCAL_BACKUP_PATH="/custom/backup/path"
+
+# === n8n FOLDER STRUCTURE SETTINGS ===
+# Enable n8n folder structure mirroring in Git (requires n8n API access)
+FOLDER_STRUCTURE=true
+
+# n8n instance URL (required if FOLDER_STRUCTURE=true)
+N8N_BASE_URL="http://localhost:5678"
+
+# n8n API key for API interactions - note folder interactions are not available via API
+# This value is largely redundant until folders are available via API
+# N8N_API_KEY="n8n_api_1234567890abcdef1234567890abcdef"
+
+# n8n credential name for session-based login (stored inside n8n credentials)
+# Used when API key is not provided. Example: Basic Auth credential named "N8N REST BACKUP"
+N8N_LOGIN_CREDENTIAL_NAME="N8N REST BACKUP"
+
+# Optional: direct login fallback (prefer storing credentials via N8N_LOGIN_CREDENTIAL_NAME)
+# N8N_EMAIL="pull-test@example.com"
+# N8N_PASSWORD="SuperSecret123!"
+
+# === LOGGING SETTINGS ===
+# Enable verbose debug logging (true/false, defaults to false)
+VERBOSE=false
+
+# Enable dry run mode - simulate actions without making changes (true/false, defaults to false)
+DRY_RUN=false
+
+# Path to log file for persistent logging (optional)
+LOG_FILE="/var/log/n8n-git.log"
+
+# === PULL/RESET SETTINGS ===
+# Preserve workflow IDs during import/reset by default (true/false)
+RESTORE_PRESERVE_ID=false
+# Avoid overwriting existing workflows during import (mint new IDs instead) (true/false)
+RESTORE_NO_OVERWRITE=false
+
+# === AUTOMATION SETTINGS ===
+# Skip interactive prompts, any unset values will use defaults (true/false, defaults to false)
+ASSUME_DEFAULTS=false

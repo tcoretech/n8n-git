@@ -1,0 +1,27 @@
+# Local development environment
+local-dev/
+test.logs
+
+# Local configuration file (project-specific)
+.config
+.env
+
+# Ignore markdown files by default, then re-include specific ones
+*.md
+!README.md
+!CHANGELOG.md
+!docs/**/*.md
+!specs/**/*.md
+!lib/**/*.md
+
+# Codex CLI local state (do not commit)
+.codex/
+.claude/
+
+# Generated/system artefacts
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+*.log
+.idea/

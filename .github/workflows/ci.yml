@@ -1,0 +1,131 @@
+name: n8n Git CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    name: Lint (syntax + ShellCheck)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install lint dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y shellcheck
+
+    - name: Run make lint
+      run: |
+        chmod +x tests/test-shellcheck.sh tests/test-syntax.sh
+        make lint
+
+    - name: Upload ShellCheck report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: shellcheck-report
+        path: shellcheck-report.md
+
+  push-test:
+    name: Push Flow Regression
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install test dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq
+
+    - name: Run make push-test
+      run: |
+        chmod +x tests/test-push.sh
+        make push-test
+
+    - name: Cleanup test container
+      if: always()
+      run: |
+        docker rm -f n8n-git-test 2>/dev/null || true
+        docker rm -f n8n-pull-id-test 2>/dev/null || true
+
+  pull-test:
+    name: Pull Flow Regression
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install test dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq
+
+    - name: Run make pull-test
+      run: |
+        chmod +x tests/test-pull.sh
+        make pull-test
+
+    - name: Cleanup test container
+      if: always()
+      run: |
+        docker rm -f n8n-pull-id-test 2>/dev/null || true
+
+  reset-test:
+    name: Reset Flow Regression
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install test dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq
+
+    - name: Run make reset-test
+      run: |
+        chmod +x tests/test-reset.sh
+        make reset-test
+
+    - name: Cleanup test container
+      if: always()
+      run: |
+        docker rm -f n8n-reset-regression 2>/dev/null || true
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [lint, push-test, pull-test, reset-test]
+    if: always()
+    steps:
+    - name: Generate test summary
+      run: |
+        echo "# Test Summary" > test-summary.md
+        echo "" >> test-summary.md
+        echo "## Results Overview" >> test-summary.md
+        echo "- Lint: ${{ needs.lint.result }}" >> test-summary.md
+        echo "- Push Test: ${{ needs['push-test'].result }}" >> test-summary.md
+        echo "- Pull Test: ${{ needs['pull-test'].result }}" >> test-summary.md
+        echo "- Reset Test: ${{ needs['reset-test'].result }}" >> test-summary.md
+        echo "" >> test-summary.md
+        echo "## Overall Status" >> test-summary.md
+        if [[ "${{ needs.lint.result }}" == "success" && \
+              "${{ needs['push-test'].result }}" == "success" && \
+              "${{ needs['pull-test'].result }}" == "success" && \
+              "${{ needs['reset-test'].result }}" == "success" ]]; then
+          echo "✅ ALL TESTS PASSED" >> test-summary.md
+        else
+          echo "❌ SOME TESTS FAILED" >> test-summary.md
+        fi
+
+    - name: Upload test summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-summary
+        path: test-summary.md

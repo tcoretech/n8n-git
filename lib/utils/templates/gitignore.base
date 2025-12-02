@@ -1,0 +1,22 @@
+# n8n Git Push/Pull - managed ignore rules
+.gitignore
+
+# Environment security
+.env
+*.env
+**/.env
+**/*.env
+
+# Archive directories
+archive/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
