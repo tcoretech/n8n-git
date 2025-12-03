@@ -282,22 +282,29 @@ Import workflows from Git or local storage into n8n. Optionally recreate folder 
 
 **Examples**:
 
+**Restore from Git with folder structure** — Ideal for disaster recovery or cloning n8n instances. Recreates the complete project and folder hierarchy from your backup repository.
+
 ```bash
-# Restore from Git with folder structure
 n8n-git pull \
   --container n8n \
   --repo "user/n8n-backup" \
   --folder-structure \
   --n8n-url "http://localhost:5678" \
   --defaults
+```
 
-# Import from local backup (no folder sync)
+**Import from local backup** — Best for offline restores or when working without Git. Imports workflows and credentials from local filesystem storage without folder sync.
+
+```bash
 n8n-git pull \
   --container n8n \
   --workflows local \
   --credentials local
+```
 
-# Selective restore (workflows only, preserve IDs)
+**Selective restore with ID preservation** — Perfect for importing specific workflows without duplicates. Restores only workflows while preserving their original IDs to avoid conflicts with existing workflows.
+
+```bash
 n8n-git pull \
   --repo "user/n8n-backup" \
   --workflows 2 \
@@ -329,23 +336,36 @@ Replay Git history into n8n to restore, archive, or delete workflows based on co
 
 **Examples**:
 
+**Reset to specific commit** — Useful for undoing recent changes or reverting to a known good state. Soft mode archives workflows that don't exist in the target commit.
+
 ```bash
-# Reset to specific commit (soft mode = archive missing workflows)
 n8n-git reset --to abc123f --mode soft
+```
 
-# Interactive picker (browse commits, filter, toggle day/week view)
+**Interactive commit browser** — Best for exploring history visually. Browse commits with filters and toggle between day/week view to find the exact state you want.
+
+```bash
 n8n-git reset --interactive --mode soft
+```
 
-# Time-window recovery (restore workflows from date range)
+**Time-window recovery** — Perfect for recovering workflows from a specific date range. Restores all workflows that existed during the specified time period.
+
+```bash
 n8n-git reset \
   --since "2025-11-01 09:00" \
   --until "2025-11-04 23:59" \
   --mode soft
+```
 
-# Hard reset (permanently delete workflows not in target commit)
+**Hard reset to tag** — Use with caution for permanent cleanup. Permanently deletes workflows not present in the target commit (after archiving them first).
+
+```bash
 n8n-git reset --to v2.0.0 --mode hard  # Use with caution!
+```
 
-# Preview impact without changes
+**Preview impact without changes** — Always preview first to understand what will change. Shows which workflows would be archived or deleted without actually performing the operation.
+
+```bash
 n8n-git reset --to main --dry-run
 ```
 
