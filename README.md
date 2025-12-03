@@ -232,33 +232,37 @@ Export workflows, credentials, and environment variables from n8n to Git or loca
 
 **Examples**:
 
+**Git backup with folder structure** — Ideal for version control and team collaboration. Workflows are pushed to Git while sensitive credentials remain local and encrypted.
+
 ```bash
-# Git backup (workflows to Git, credentials local & encrypted)
 n8n-git push \
   --container n8n \
   --workflows 2 \
   --credentials 2 \
   --folder-structure \
   --n8n-url "http://localhost:5678"
+```
 
-# Local-only backup
+**Local-only backup** — Best for air-gapped environments or when you want full control over storage. All data stays on your local machine without touching remote repositories.
+
+```bash
 n8n-git push \
   --container n8n \
   --workflows local \
   --credentials local \
   --environment local
+```
 
-# Scheduled production backup with project/folder structure
-n8n-git push \
-  --workflows remote \
-  --credentials remote \
-  --repo myusername/n8n-backup \
-  --github-path %PERSONAL_PROJECT%
-  --token github_pat_xxxxxxxxxxx
+**Automated daily backup via cron** — Perfect for scheduled production backups. Runs automatically at 2 AM daily with dated folders for easy restoration. Use `--defaults` for non-interactive execution.
+
+```bash
+# /etc/cron.d/n8n-backup
+0 2 * * * user /usr/local/bin/n8n-git push \
+  --workflows 2 \
+  --credentials 1 \
   --folder-structure \
-  --n8n-url "$N8N_URL" \
-  --n8n-cred "N8N REST BACKUP" \
-  --defaults  # Non-interactive
+  --github-path "daily-backup/%DATE%/" \
+  --defaults
 ```
 
 **Key Flags**:
