@@ -51,24 +51,23 @@ This workflow runs daily at 2 AM and:
 **Prerequisites:**
 - n8n running in a container built with n8n-git (see Dockerfile example)
 - Environment variables configured:
-  - `N8N_GIT_EXECUTION_MODE=local`
   - `N8N_BASE_URL=http://localhost:5678`
   - `GITHUB_TOKEN=your_token`
   - `GITHUB_REPO=your_username/repo`
+- n8n-git will automatically use local execution when run inside the container
 
 ## Configuration Examples
 
-### Basic Local Mode Config
+### Basic Config for Embedded n8n-git
 
 Create a `.config` file in your n8n container:
 
 ```bash
 # /root/.config/n8n-git/config
 
-# Execution mode
-N8N_GIT_EXECUTION_MODE=local
-
 # n8n API access
+# When running inside the container, n8n-git automatically detects
+# the local n8n CLI and uses it directly (no container parameter needed)
 N8N_BASE_URL=http://localhost:5678
 N8N_LOGIN_CREDENTIAL_NAME="N8N REST BACKUP"
 
@@ -100,7 +99,6 @@ metadata:
   name: n8n-git-config
 data:
   config: |
-    N8N_GIT_EXECUTION_MODE=local
     N8N_BASE_URL=http://localhost:5678
     N8N_LOGIN_CREDENTIAL_NAME="N8N REST BACKUP"
     GITHUB_REPO="myuser/n8n-workflows"
@@ -225,13 +223,19 @@ RUN which n8n-git
 echo $GITHUB_TOKEN | grep -q "ghp_" && echo "Token set" || echo "Token missing"
 ```
 
-### Issue: Execute Command node shows "Docker not available"
+### Issue: "Docker not available" or "Container not found"
 
-**Solution:** This means n8n-git is still trying to use Docker mode. Set execution mode explicitly:
+**Solution:** When running inside the n8n container, ensure you're NOT specifying a --container parameter:
 
 ```bash
-N8N_GIT_EXECUTION_MODE=local n8n-git push --workflows 2
+# Correct (inside container):
+n8n-git push --workflows 2
+
+# Wrong (inside container):
+n8n-git push --container n8n --workflows 2  # Don't do this!
 ```
+
+n8n-git will automatically detect the local n8n CLI and use it directly.
 
 ## Additional Resources
 

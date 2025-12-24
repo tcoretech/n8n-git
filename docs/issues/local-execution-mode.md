@@ -1,8 +1,13 @@
 # Feature Request: Support Local Host Execution Mode with Auto-Detection
 
-> **Status**: Proposed
+> **Status**: Superseded by Implementation Plan
 > **Priority**: Enhancement
 > **Labels**: `enhancement`, `feature-request`, `docker`, `architecture`
+>
+> **NOTE**: This initial proposal has been simplified. See the approved implementation plan at
+> [`docs/plans/local-execution-implementation-plan.md`](../plans/local-execution-implementation-plan.md)
+> for the current approach, which eliminates user-facing configuration variables and uses
+> simple container parameter detection instead.
 
 ## Summary
 

@@ -18,11 +18,9 @@ RUN apk add --no-cache \
 # Install n8n-git
 RUN curl -sSL https://raw.githubusercontent.com/tcoretech/n8n-git/main/install.sh | bash
 
-# Configure n8n-git for local execution mode
-# This tells n8n-git to run commands directly instead of via docker exec
-ENV N8N_GIT_EXECUTION_MODE=local
-
 # Configure n8n API access
+# When n8n-git runs inside the container without --container flag,
+# it will automatically detect the local n8n CLI and use it directly
 # Note: You'll still need to set N8N_LOGIN_CREDENTIAL_NAME in your config
 # or provide authentication credentials
 ENV N8N_BASE_URL=http://localhost:5678
