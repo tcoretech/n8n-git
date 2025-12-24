@@ -1,0 +1,112 @@
+{
+  "name": "Automated n8n Backup to Git",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule: Daily 2 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "command": "n8n-git push --workflows 2 --credentials 1 --folder-structure --defaults",
+        "cwd": "/"
+      },
+      "name": "Execute: n8n-git push",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json[\"exitCode\"]}}",
+              "operation": "equal",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "name": "Check Exit Code",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "text": "✅ n8n backup successful!\n\nWorkflows backed up to Git at {{ $now.format('yyyy-MM-dd HH:mm:ss') }}",
+        "channel": "#backups"
+      },
+      "name": "Slack: Success",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [910, 200]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "text": "❌ n8n backup failed!\n\nError output:\n```\n{{ $json[\"stderr\"] }}\n```\n\nExit code: {{ $json[\"exitCode\"] }}",
+        "channel": "#alerts"
+      },
+      "name": "Slack: Failure",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [910, 400]
+    }
+  ],
+  "connections": {
+    "Schedule: Daily 2 AM": {
+      "main": [
+        [
+          {
+            "node": "Execute: n8n-git push",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute: n8n-git push": {
+      "main": [
+        [
+          {
+            "node": "Check Exit Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Exit Code": {
+      "main": [
+        [
+          {
+            "node": "Slack: Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
