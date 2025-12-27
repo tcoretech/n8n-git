@@ -42,8 +42,22 @@ Keep workflows, credentials, and folders in sync with GitHub or a local file sys
 
 ### Prerequisites
 
-- **Self-hosted n8n instance** running in Docker
-- Docker installed and accessible on your host machine
+n8n-git supports multiple execution environments:
+
+1. **Docker Execution** (Default):
+   - Self-hosted n8n instance running in Docker
+   - Docker installed and accessible on your host machine
+
+2. **Local Execution**:
+   - n8n installed locally (npm/pnpm)
+   - `n8n` command available in PATH
+
+3. **Embedded Execution**:
+   - n8n-git installed inside your n8n container
+   - Useful for triggering git operations from n8n workflows
+
+**Common Requirements:**
+
 - Host system with `bash` 4+, `git`, `curl`, and `jq`
 - GitHub account (for remote Git storage) or local filesystem access
 
@@ -188,13 +202,13 @@ n8n-git push
 ### Configuration Reference
 
 | Config Variable | CLI Flag | Description | Values |
-|---------------|-----------|-------------|---------|
-| **Github options** ||||
+| --------------- | ----------- | ------------- | --------- |
+| **Github options** | | | |
 | `GITHUB_REPO` | `--repo <user/repo>` | Git repository | `myuser/n8n-backups` |
 | `GITHUB_TOKEN` | `--token <pat>` | GitHub Personal Access Token | `ghp_...` |
 | `GITHUB_BRANCH` | `--branch <name>` | Git branch | `main` (default) |
 | `GITHUB_PATH` | `--github-path <path>` | Repo subdirectory (supports `%DATE%`, `%PROJECT%`, `%PERSONAL_PROJECT%`, `%HOSTNAME%`) | `backups/%DATE%/` |
-| **n8n Instance Options** ||||
+| **n8n Instance Options** | | | |
 | `N8N_CONTAINER` | `--container <id\|name>` | Docker container | `n8n` (default) |
 | `N8N_BASE_URL` | `--n8n-url <url>` | n8n base URL | `http://localhost:5678` |
 | `N8N_API_KEY` | `--n8n-api-key <key>` | n8n API key (placeholder) | `n8n_api_...` |
@@ -203,15 +217,15 @@ n8n-git push
 | `N8N_PASSWORD` | `--n8n-password <pass>` | Direct session password | Not recommended |
 | `N8N_PROJECT` | `--project <project>` | n8n Project | `%PERSONAL_PROJECT%` (default) |
 | `N8N_PATH` | `--n8n-path <path>` | Path within n8n project | `clients/acme` |
-| **Storage Mode Options** ||||
+| **Storage Mode Options** | | | |
 | `WORKFLOWS` | `--workflows <mode>` | Workflow handling | `0`=skip, `1`=local, `2`=Git |
 | `CREDENTIALS` | `--credentials <mode>` | Credential handling | `0`=skip, `1`=local, `2`=Git |
 | `ENVIRONMENT` | `--environment <mode>` | Environment variable handling | `0`=skip, `1`=local, `2`=Git |
 | `LOCAL_BACKUP_PATH` | `--local-path <path>` | Local storage directory | `~/n8n-backup` |
 | `DECRYPT_CREDENTIALS` | `--decrypt <true\|false>` | Export decrypted credentials | `false` (default) |
-| **Folder Structure Options** ||||
+| **Folder Structure Options** | | | |
 | `FOLDER_STRUCTURE` | `--folder-structure` | Sync n8n folder hierarchy | `true`/`false` |
-| **General Options** ||||
+| **General Options** | | | |
 | `DRY_RUN` | `--dry-run` | Simulate without changes | Flag / `true`/`false` |
 | `ASSUME-DEFAULTS` | `--defaults` | Non-interactive mode | Flag / `true`/`false` |
 | `VERBOSE` | `--verbose` | Verbose logging | Flag / `true`/`false` |
@@ -380,7 +394,7 @@ n8n-git reset --to main --dry-run
 **Reset Modes**:
 
 | Mode | Behavior | API Calls |
-|------|----------|-----------|
+| ------ | ---------- | ----------- |
 | `soft` | Archive workflows missing from target | `POST /rest/workflows/{id}/archive` |
 | `hard` | Delete workflows not in target (after archive) | Archive + `DELETE /rest/workflows/{id}` |
 

@@ -234,7 +234,7 @@ n8n_api_get_folders() {
     N8N_PROJECTS_CACHE_JSON="$projects_json"
 
     local folders_tmp
-    folders_tmp=$(mktemp -t n8n-folders-XXXXXXXX.json)
+    folders_tmp=$(mktemp /tmp/n8n-folders-XXXXXXXX)
     printf '[]' > "$folders_tmp"
 
     local found_any="false"

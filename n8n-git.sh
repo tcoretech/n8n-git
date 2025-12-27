@@ -335,16 +335,8 @@ main() {
     # Load config file (must happen after parsing args)
     load_config
 
-    if [[ -z "$default_container" ]]; then
-        default_container="n8n"
-    fi
-
-    if [[ -z "$container" ]]; then
-        container="$default_container"
-        if [[ "$container_source" == "unset" ]]; then
-            container_source="default"
-        fi
-    fi
+    # Note: We no longer force a default container here to allow for local execution detection.
+    # If container is empty, we will try to detect local n8n or fallback to "n8n" container later.
 
     if [[ -z "$environment" ]]; then
         environment=0
@@ -502,9 +494,9 @@ main() {
         dry_run=${dry_run:-false}
         
         # Basic parameters are always required
-        if [ -z "$command" ] || [ -z "$container" ]; then
+        if [ -z "$command" ]; then
             log ERROR "Running in non-interactive mode but required parameters are missing."
-            log INFO "Please provide a command (push|pull) and --container."
+            log INFO "Please provide a command (push|pull)."
             show_help
             exit 1
         fi
@@ -556,23 +548,54 @@ main() {
             log SUCCESS "n8n API configuration validated successfully!"
         fi
 
-        # Validate container
-        # Sanitize container variable to remove any potential newlines or special chars
-        container=$(echo "$container" | tr -d '\n\r' | xargs)
-        local found_id
-        # Try to find container by ID first, then by name
-        found_id=$(docker ps -q --filter "id=$container" | head -n 1)
-        if [ -z "$found_id" ]; then
-            found_id=$(docker ps -q --filter "name=$container" | head -n 1)
+        # Validate container or detect local execution
+        if [[ -n "$container" ]]; then
+            # Sanitize container variable to remove any potential newlines or special chars
+            container=$(echo "$container" | tr -d '\n\r' | xargs)
+            
+            if ! command -v docker >/dev/null 2>&1; then
+                log ERROR "Container specified but 'docker' command not found."
+                exit 1
+            fi
+
+            local found_id
+            # Try to find container by ID first, then by name
+            found_id=$(docker ps -q --filter "id=$container" | head -n 1)
+            if [ -z "$found_id" ]; then
+                found_id=$(docker ps -q --filter "name=$container" | head -n 1)
+            fi
+            if [ -z "$found_id" ]; then
+                 log ERROR "Specified container '${container}' not found or not running."
+                 log INFO "Please check that the container exists and is currently running."
+                 log INFO "Use 'docker ps' to see available running containers."
+                 exit 1
+            fi
+            container=$found_id
+            log INFO "Using specified container: $container"
+        else
+            # No container specified - try local n8n
+            if command -v n8n >/dev/null 2>&1; then
+                log INFO "Using local n8n execution (n8n command found)"
+                # container remains empty, which signals local execution to n8n_exec
+            else
+                # Fallback to default "n8n" container if it exists, for backward compatibility
+                local fallback_container="n8n"
+                local found_id=""
+                
+                if command -v docker >/dev/null 2>&1; then
+                    found_id=$(docker ps -q --filter "name=$fallback_container" | head -n 1)
+                fi
+                
+                if [[ -n "$found_id" ]]; then
+                    container=$found_id
+                    log INFO "No container specified and local n8n not found. Found 'n8n' container, using it: $container"
+                else
+                    log ERROR "No container specified and local n8n command not found."
+                    log INFO "Please specify --container or ensure n8n is installed locally."
+                    exit 1
+                fi
+            fi
         fi
-        if [ -z "$found_id" ]; then
-             log ERROR "Specified container '${container}' not found or not running."
-             log INFO "Please check that the container exists and is currently running."
-             log INFO "Use 'docker ps' to see available running containers."
-             exit 1
-        fi
-        container=$found_id
-        log INFO "Using specified container: $container"
 
     else
         log DEBUG "Running in interactive mode."
@@ -838,8 +861,8 @@ main() {
     log DEBUG "GitHub required: $needs_github"
 
     # Final validation
-    if [ -z "$command" ] || [ -z "$container" ]; then
-        log ERROR "Missing required parameters (Command, Container). Exiting."
+    if [ -z "$command" ]; then
+        log ERROR "Missing required parameters (Command). Exiting."
         exit 1
     fi
     

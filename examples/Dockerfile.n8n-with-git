@@ -1,61 +1,38 @@
-# Example Dockerfile: n8n with embedded n8n-git
-# This creates an n8n container with n8n-git installed inside,
-# enabling workflows to call n8n-git commands via Execute Command node.
+# Example Dockerfile: Adding n8n-git to the official n8n image
+# This approach uses a multi-stage build to copy 'apk' from Alpine
+# so that we can install dependencies (git, curl, bash) into the n8n image.
 
+# Stage 1: Get apk tools from Alpine
+FROM alpine:3.23 AS builder
+
+# Stage 2: Build the final image
 FROM n8nio/n8n:latest
+USER root
 
-# Install n8n-git dependencies
-# - bash: Required for n8n-git scripts
-# - git: Version control operations
-# - curl: For installation script
-# - jq: JSON processing
-RUN apk add --no-cache \
-    bash>=5.0 \
-    git>=2.30 \
-    curl>=7.0 \
-    jq>=1.6
+# Restore apk from builder
+COPY --from=builder /sbin/apk /sbin/apk
+COPY --from=builder /lib/apk /lib/apk
+COPY --from=builder /etc/apk /etc/apk
+COPY --from=builder /usr/share/apk /usr/share/apk
+COPY --from=builder /usr/lib/libapk.so.3.0.0 /usr/lib/libapk.so.3.0.0
+COPY --from=builder /usr/lib/libssl.so.3 /usr/lib/libssl.so.3
+COPY --from=builder /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so.3
+
+# Install dependencies required by n8n-git
+RUN apk update && apk add --no-cache \
+    git \
+    curl \
+    bash \
+    jq \
+    openssh-client \
+    && rm -rf /var/cache/apk/*
 
 # Install n8n-git
-RUN curl -sSL https://raw.githubusercontent.com/tcoretech/n8n-git/main/install.sh | bash
+# Note: In a real deployment, you might pin a specific version or commit
+RUN curl -fsSL https://raw.githubusercontent.com/tcoretech/n8n-git/main/install.sh | bash
 
-# Configure n8n API access
-# When n8n-git runs inside the container without --container flag,
-# it will automatically detect the local n8n CLI and use it directly
-# Note: You'll still need to set N8N_LOGIN_CREDENTIAL_NAME in your config
-# or provide authentication credentials
-ENV N8N_BASE_URL=http://localhost:5678
+# Create directory for n8n-git configuration
+RUN mkdir -p /home/node/.config/n8n-git && \
+    chown -R node:node /home/node/.config/n8n-git
 
-# Optional: Pre-configure common settings
-# Uncomment and customize as needed:
-# ENV FOLDER_STRUCTURE=true
-# ENV WORKFLOWS=2
-# ENV CREDENTIALS=1
-# ENV GITHUB_TOKEN=your_token_here
-# ENV GITHUB_REPO=your_username/n8n-workflows
-
-# Optional: Configure git identity for commits
-# ENV GIT_AUTHOR_NAME="n8n Automation"
-# ENV GIT_AUTHOR_EMAIL="n8n@example.com"
-# ENV GIT_COMMITTER_NAME="n8n Automation"
-# ENV GIT_COMMITTER_EMAIL="n8n@example.com"
-
-# Optional: Create a default config directory
-RUN mkdir -p /root/.config/n8n-git
-
-# The container will run n8n as usual
-# n8n-git commands can now be called from Execute Command nodes
-# Example workflow node:
-#   Execute Command: n8n-git push --workflows 2 --folder-structure --defaults
-
-# Build instructions:
-# docker build -t n8n-with-git:latest -f examples/Dockerfile.n8n-with-git .
-
-# Run instructions:
-# docker run -d \
-#   --name n8n \
-#   -p 5678:5678 \
-#   -v n8n_data:/home/node/.n8n \
-#   -e N8N_LOGIN_CREDENTIAL_NAME="N8N REST BACKUP" \
-#   -e GITHUB_TOKEN="your_github_token" \
-#   -e GITHUB_REPO="your_username/n8n-workflows" \
-#   n8n-with-git:latest
+USER node

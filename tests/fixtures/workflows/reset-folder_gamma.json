@@ -1,0 +1,22 @@
+{
+  "name": "Folder Workflow Gamma",
+  "nodes": [
+    {
+      "parameters": {
+        "value": "Gamma"
+      },
+      "name": "Set",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [320, 360]
+    }
+  ],
+  "meta": {
+    "instanceId": "folder-gamma-instance"
+  },
+  "connections": {},
+  "active": false,
+  "settings": {
+    "notes": "Resides inside Teams/Support folder"
+  }
+}

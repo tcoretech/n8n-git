@@ -255,11 +255,23 @@ EOF
 }
 
 select_container() {
-    log HEADER "Selecting n8n container..."
-    mapfile -t containers < <(docker ps --format "{{.ID}}\t{{.Names}}\t{{.Image}}" 2>/dev/null || true)
+    log HEADER "Selecting execution environment..."
+    
+    local has_docker=false
+    local has_local_n8n=false
+    local containers=()
+    
+    if command -v docker >/dev/null 2>&1 && docker ps >/dev/null 2>&1; then
+        has_docker=true
+        mapfile -t containers < <(docker ps --format "{{.ID}}\t{{.Names}}\t{{.Image}}" 2>/dev/null || true)
+    fi
+    
+    if command -v n8n >/dev/null 2>&1; then
+        has_local_n8n=true
+    fi
 
-    if [ ${#containers[@]} -eq 0 ]; then
-        log ERROR "No running Docker containers found."
+    if [ ${#containers[@]} -eq 0 ] && [ "$has_local_n8n" = "false" ]; then
+        log ERROR "No running Docker containers found and local n8n not detected."
         exit 1
     fi
 
@@ -268,12 +280,22 @@ select_container() {
     local all_ids=()
     local default_option_num=-1
 
-    log INFO "${BOLD}Available running containers:${NC}"
+    log INFO "${BOLD}Available execution environments:${NC}"
     log INFO "${DIM}------------------------------------------------${NC}"
     log INFO "${BOLD}Num\tID (Short)\tName\tImage${NC}"
     log INFO "${DIM}------------------------------------------------${NC}"
 
     local i=1
+    
+    # Add Local Execution option if available
+    if [ "$has_local_n8n" = "true" ]; then
+        local line
+        line=$(printf "%s%d)%s %s\t%s\t%s" "$GREEN" "$i" "$NC" "LOCAL" "Local n8n CLI" "(host)")
+        n8n_options+=("$line")
+        all_ids+=("LOCAL_EXECUTION") # Special marker
+        i=$((i+1))
+    fi
+
     for container_info in "${containers[@]}"; do
         local id name image
         IFS=$'\t' read -r id name image <<< "$container_info"
@@ -309,15 +331,22 @@ select_container() {
     prompt_text+=": "
 
     while true; do
-    printf '%s' "$prompt_text"
+        printf '%s' "$prompt_text"
         read -r selection
         selection=${selection:-$default_option_num}
 
-        if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le ${#containers[@]} ]; then
+        if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le ${#all_ids[@]} ]; then
             local selected_full_id="${all_ids[$((selection-1))]}"
-            log SUCCESS "Selected container: $selected_full_id"
+            
+            if [ "$selected_full_id" = "LOCAL_EXECUTION" ]; then
+                log SUCCESS "Selected: Local n8n execution"
+                SELECTED_CONTAINER_ID="" # Empty ID means local execution
+            else
+                log SUCCESS "Selected container: $selected_full_id"
+                SELECTED_CONTAINER_ID="$selected_full_id"
+            fi
             # shellcheck disable=SC2034  # exported for caller consumption
-            SELECTED_CONTAINER_ID="$selected_full_id"
+            export SELECTED_CONTAINER_ID
             return
         elif [ -z "$selection" ] && [ "$default_option_num" -ne -1 ]; then
              local selected_full_id="${all_ids[$((default_option_num-1))]}"

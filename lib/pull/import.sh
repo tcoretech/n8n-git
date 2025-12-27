@@ -417,7 +417,7 @@ pull_import() {
                 log SUCCESS "Staged $staged_count credential file(s) from $repo_credentials"
             fi
 
-            credentials_bundle_tmp=$(mktemp -t n8n-credentials-bundle-XXXXXXXX.json)
+            credentials_bundle_tmp=$(mktemp /tmp/n8n-credentials-bundle-XXXXXXXX)
             if ! bundle_credentials_directory "$credentials_stage_dir" "$credentials_bundle_tmp"; then
                 log ERROR "Failed to assemble credentials from directory: $repo_credentials"
                 cleanup_temp_path "$credentials_stage_dir"
@@ -676,7 +676,7 @@ pull_import() {
                         fi
 
                         local attempt_tmpfile
-                        attempt_tmpfile="$(mktemp -t n8n-decrypted-XXXXXXXX.json)"
+                        attempt_tmpfile="$(mktemp /tmp/n8n-decrypted-XXXXXXXX)"
                         if decrypt_credentials_file "$decryption_key" "$credentials_payload_file" "$attempt_tmpfile"; then
                             if ! validate_credentials_payload "$attempt_tmpfile" ; then
                                 log ERROR "Decrypted credentials failed validation."
@@ -820,7 +820,7 @@ pull_import() {
                 if [[ -z "$stage_source_dir" || ! -d "$stage_source_dir" ]]; then
                     log ERROR "Workflow directory not found for staging: ${stage_source_dir:-<empty>}"
                     copy_status="failed"
-                elif ! dockExec "$container_id" "rm -rf $container_import_workflows && mkdir -p $container_import_workflows" false; then
+                elif ! n8n_exec "$container_id" "rm -rf $container_import_workflows && mkdir -p $container_import_workflows" false; then
                     log ERROR "Failed to prepare container directory for workflow import."
                     copy_status="failed"
                 else
@@ -837,7 +837,7 @@ pull_import() {
                         if [[ -n "$n8n_base_url" ]]; then
                             local mapping_json=""
                             if get_workflow_folder_mapping "$container_id" "" mapping_json; then
-                                existing_workflow_mapping=$(mktemp -t n8n-workflow-map-XXXXXXXX.json)
+                                existing_workflow_mapping=$(mktemp)
                                 printf '%s' "$mapping_json" > "$existing_workflow_mapping"
                                 log DEBUG "Captured workflow folder mapping for duplicate detection."
                             else
@@ -848,7 +848,9 @@ pull_import() {
                         fi
                     fi
 
-                    staged_manifest_file=$(mktemp -t n8n-staged-workflows-XXXXXXXX.json)
+                    log DEBUG "Creating staged manifest file..."
+                    staged_manifest_file=$(mktemp)
+                    log DEBUG "staged_manifest_file: '$staged_manifest_file'"
                     if ! stage_directory_workflows_to_container "$stage_source_dir" "$container_id" "$container_import_workflows" "$staged_manifest_file" "$existing_workflow_snapshot" "$preserve_ids" "$no_overwrite" "$existing_workflow_mapping" "$stage_target_folder"; then
                         rm -f "$staged_manifest_file"
                         log ERROR "Failed to copy workflow files into container."
@@ -865,10 +867,10 @@ pull_import() {
                 local docker_cp_repo_workflows
                 docker_cp_repo_workflows=$(convert_path_for_docker_cp "$repo_workflows")
                 [[ -z "$docker_cp_repo_workflows" ]] && docker_cp_repo_workflows="$repo_workflows"
-                if docker cp "$docker_cp_repo_workflows" "${container_id}:${container_import_workflows}"; then
-                    log SUCCESS "Successfully copied workflows.json to container"
+                if copy_to_n8n "$docker_cp_repo_workflows" "${container_import_workflows}" "$container_id"; then
+                    log SUCCESS "Successfully copied workflows.json to n8n instance"
                 else
-                    log ERROR "Failed to copy workflows.json to container."
+                    log ERROR "Failed to copy workflows.json to n8n instance."
                     copy_status="failed"
                 fi
             fi
@@ -903,17 +905,17 @@ pull_import() {
             fi
         else
             if [[ "$credentials_import_mode" == "directory" ]]; then
-                if ! dockExec "$container_id" "rm -rf '$container_import_credentials' && mkdir -p '$container_import_credentials'" false; then
+                if ! n8n_exec "$container_id" "rm -rf '$container_import_credentials' && mkdir -p '$container_import_credentials'" false; then
                     log ERROR "Failed to prepare container directory for credential import"
                     copy_status="failed"
                 else
                     local docker_cp_credentials_dir
                     docker_cp_credentials_dir=$(convert_path_for_docker_cp "${credentials_to_import}/.")
                     [[ -z "$docker_cp_credentials_dir" ]] && docker_cp_credentials_dir="${credentials_to_import}/."
-                    if docker cp "$docker_cp_credentials_dir" "${container_id}:${container_import_credentials}/"; then
-                        log SUCCESS "Successfully copied credential directory to container"
+                    if copy_to_n8n "$docker_cp_credentials_dir" "${container_import_credentials}/" "$container_id"; then
+                        log SUCCESS "Successfully copied credential directory to n8n instance"
                     else
-                        log ERROR "Failed to copy credential directory to container."
+                        log ERROR "Failed to copy credential directory to n8n instance."
                         copy_status="failed"
                     fi
                 fi
@@ -921,10 +923,10 @@ pull_import() {
                 local docker_cp_credentials_file
                 docker_cp_credentials_file=$(convert_path_for_docker_cp "$credentials_to_import")
                 [[ -z "$docker_cp_credentials_file" ]] && docker_cp_credentials_file="$credentials_to_import"
-                if docker cp "$docker_cp_credentials_file" "${container_id}:${container_import_credentials}"; then
-                    log SUCCESS "Successfully copied credential bundle to container"
+                if copy_to_n8n "$docker_cp_credentials_file" "${container_import_credentials}" "$container_id"; then
+                    log SUCCESS "Successfully copied credential bundle to n8n instance"
                 else
-                    log ERROR "Failed to copy credential bundle to container."
+                    log ERROR "Failed to copy credential bundle to n8n instance."
                     copy_status="failed"
                 fi
             fi
@@ -943,7 +945,7 @@ pull_import() {
     fi
     
     if [ "$copy_status" = "failed" ]; then
-        log ERROR "Failed to copy files to container - cannot proceed with pull"
+        log ERROR "Failed to copy files to n8n instance - cannot proceed with pull"
         if [[ -n "$download_dir" ]]; then
             cleanup_download_dir
         fi
@@ -952,10 +954,10 @@ pull_import() {
 
     if [ "$is_dry_run" != "true" ]; then
         if [[ "$workflows_mode" != "0" ]]; then
-            dockExecAsRoot "$container_id" "if [ -d '$container_import_workflows' ]; then chown -R node:node '$container_import_workflows'; fi" false || log WARN "Unable to adjust ownership for workflow import directory"
+            n8n_exec_root "$container_id" "if [ -d '$container_import_workflows' ]; then chown -R node:node '$container_import_workflows'; fi" false || log WARN "Unable to adjust ownership for workflow import directory"
         fi
         if [[ "$credentials_mode" != "0" ]]; then
-            dockExecAsRoot "$container_id" "if [ -e '$container_import_credentials' ]; then chown -R node:node '$container_import_credentials'; fi" false || log WARN "Unable to adjust ownership for credentials import file"
+            n8n_exec_root "$container_id" "if [ -e '$container_import_credentials' ]; then chown -R node:node '$container_import_credentials'; fi" false || log WARN "Unable to adjust ownership for credentials import file"
         fi
     fi
     
@@ -975,13 +977,25 @@ pull_import() {
             log INFO "Importing workflows..."
             if [[ "$workflow_import_mode" == "directory" ]]; then
                 local -a container_workflow_files=()
-                if ! mapfile -t container_workflow_files < <(docker exec "$container_id" sh -c "find '$container_import_workflows' -type f -name '*.json' -print 2>/dev/null | sort" ); then
-                    log ERROR "Unable to enumerate staged workflows in $container_import_workflows"
-                    import_status="failed"
-                elif ((${#container_workflow_files[@]} == 0)); then
+                local find_cmd="find '$container_import_workflows' -type f -name '*.json' -print 2>/dev/null | sort"
+                
+                if [[ -n "$container_id" ]]; then
+                    if ! mapfile -t container_workflow_files < <(docker exec "$container_id" sh -c "$find_cmd"); then
+                        log ERROR "Unable to enumerate staged workflows in $container_import_workflows"
+                        import_status="failed"
+                    fi
+                else
+                    # Local execution
+                    if ! mapfile -t container_workflow_files < <(eval "$find_cmd"); then
+                        log ERROR "Unable to enumerate staged workflows in $container_import_workflows"
+                        import_status="failed"
+                    fi
+                fi
+
+                if [[ "$import_status" != "failed" ]] && ((${#container_workflow_files[@]} == 0)); then
                     log ERROR "No workflow JSON files found in $container_import_workflows to import"
                     import_status="failed"
-                else
+                elif [[ "$import_status" != "failed" ]]; then
                     local imported_count=0
                     local failed_count=0
                     for workflow_file in "${container_workflow_files[@]}"; do
@@ -989,11 +1003,15 @@ pull_import() {
                             continue
                         fi
                         local wf_name
-                        wf_name=$(docker exec "$container_id" cat "$workflow_file" | jq -r '.name // "Unknown"')
+                        if [[ -n "$container_id" ]]; then
+                            wf_name=$(docker exec "$container_id" cat "$workflow_file" | jq -r '.name // "Unknown"')
+                        else
+                            wf_name=$(cat "$workflow_file" | jq -r '.name // "Unknown"')
+                        fi
                         log INFO "Importing workflow: $wf_name"
                         local escaped_file
                         escaped_file=$(printf '%q' "$workflow_file")
-                        if ! dockExec "$container_id" "N8N_IMPORT_EXPORT_OVERWRITE=false n8n import:workflow --input=$escaped_file" false; then
+                        if ! n8n_exec "$container_id" "N8N_IMPORT_EXPORT_OVERWRITE=false n8n import:workflow --input=$escaped_file" false; then
                             log ERROR "Failed to import workflow file: $workflow_file"
                             failed_count=$((failed_count + 1))
                         else
@@ -1017,7 +1035,7 @@ pull_import() {
                                 
                                 # Update manifest with actual imported workflow IDs by comparing snapshots
                                 local updated_manifest
-                                updated_manifest=$(mktemp -t n8n-updated-manifest-XXXXXXXX.ndjson)
+                                updated_manifest=$(mktemp /tmp/n8n-updated-manifest-XXXXXXXX)
                                 if reconcile_imported_workflow_ids "$existing_workflow_snapshot" "$post_import_snapshot" "$staged_manifest_file" "$updated_manifest"; then
                                     mv "$updated_manifest" "$staged_manifest_file"
                                     log INFO "Reconciled manifest with actual imported workflow IDs from n8n"
@@ -1035,9 +1053,9 @@ pull_import() {
                     fi
                 fi
             else
-                if ! dockExec "$container_id" "N8N_IMPORT_EXPORT_OVERWRITE=false n8n import:workflow --input=$container_import_workflows" "$is_dry_run"; then
+                if ! n8n_exec "$container_id" "N8N_IMPORT_EXPORT_OVERWRITE=false n8n import:workflow --input=$container_import_workflows" "$is_dry_run"; then
                     log WARN "Standard import failed, trying with --separate flag..."
-                    if ! dockExec "$container_id" "N8N_IMPORT_EXPORT_OVERWRITE=false n8n import:workflow --separate --input=$container_import_workflows" "$is_dry_run"; then
+                    if ! n8n_exec "$container_id" "N8N_IMPORT_EXPORT_OVERWRITE=false n8n import:workflow --separate --input=$container_import_workflows" "$is_dry_run"; then
                         log ERROR "Failed to import workflows"
                         import_status="failed"
                     else
@@ -1061,9 +1079,9 @@ pull_import() {
         else
             log INFO "Importing credentials..."
             if [[ "$credentials_import_mode" == "directory" ]]; then
-                if ! dockExec "$container_id" "n8n import:credentials --separate --input=$container_import_credentials" "$is_dry_run"; then
+                if ! n8n_exec "$container_id" "n8n import:credentials --separate --input=$container_import_credentials" "$is_dry_run"; then
                     log WARN "Directory import with --separate flag failed, retrying standard import..."
-                    if ! dockExec "$container_id" "n8n import:credentials --input=$container_import_credentials" "$is_dry_run"; then
+                    if ! n8n_exec "$container_id" "n8n import:credentials --input=$container_import_credentials" "$is_dry_run"; then
                         log ERROR "Failed to import credentials"
                         import_status="failed"
                     else
@@ -1073,10 +1091,10 @@ pull_import() {
                     log SUCCESS "Credentials imported successfully"
                 fi
             else
-                if ! dockExec "$container_id" "n8n import:credentials --input=$container_import_credentials" "$is_dry_run"; then
+                if ! n8n_exec "$container_id" "n8n import:credentials --input=$container_import_credentials" "$is_dry_run"; then
                     # Try with --separate flag on failure
                     log WARN "Standard import failed, trying with --separate flag..."
-                    if ! dockExec "$container_id" "n8n import:credentials --separate --input=$container_import_credentials" "$is_dry_run"; then
+                    if ! n8n_exec "$container_id" "n8n import:credentials --separate --input=$container_import_credentials" "$is_dry_run"; then
                         log ERROR "Failed to import credentials"
                         import_status="failed"
                     else
@@ -1127,7 +1145,7 @@ pull_import() {
     # Clean up temporary files in container
     if [ "$is_dry_run" != "true" ]; then
         log DEBUG "Cleaning up temporary files in container..."
-        dockExecAsRoot "$container_id" "rm -rf $container_import_workflows $container_import_credentials 2>/dev/null || true" false >/dev/null 2>&1
+        n8n_exec_root "$container_id" "rm -rf $container_import_workflows $container_import_credentials 2>/dev/null || true" false >/dev/null 2>&1
     fi
     
     # Clean up downloaded repository

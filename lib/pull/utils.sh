@@ -217,7 +217,7 @@ bundle_credentials_directory() {
     mapfile -t credential_files < <(find "$source_dir" -maxdepth 1 -type f -name '*.json' -print | sort)
 
     local tmp_output
-    tmp_output=$(mktemp -t n8n-credential-bundle-XXXXXXXX.json)
+    tmp_output=$(mktemp /tmp/n8n-credential-bundle-XXXXXXXX)
 
     if ((${#credential_files[@]} == 0)); then
         printf '[]' >"$tmp_output"

@@ -31,7 +31,7 @@ snapshot_existing_workflows() {
                 fi
 
                 local normalized_tmp
-                normalized_tmp=$(mktemp -t n8n-existing-workflows-XXXXXXXX.json)
+                normalized_tmp=$(mktemp)
                 if { printf '%s\n' "$api_payload"; if [[ -n "$archived_payload" ]]; then printf '%s\n' "$archived_payload"; fi; } | \
                     jq -s -c 'map(if type == "array" then . else (.data // []) end) | add | unique_by(.id // (.meta.instanceId // "") + ":" + (.name // ""))' \
                     > "$normalized_tmp" 2>/dev/null; then
@@ -59,7 +59,7 @@ snapshot_existing_workflows() {
         log DEBUG "Attempting CLI workflow snapshot"
         local container_tmp="/tmp/n8n-existing-workflows-$$.json"
         local export_cmd
-        export_cmd=$'tmp_log=$(mktemp -t n8n-export-log-XXXXXXXX)\n'
+        export_cmd=$'tmp_log=$(mktemp)\n'
         export_cmd+=$'if n8n export:workflow --all --output='
         export_cmd+="$container_tmp"
         export_cmd+=$' >"$tmp_log" 2>&1; then\n'
@@ -73,21 +73,21 @@ snapshot_existing_workflows() {
         export_cmd+=$'  rm -f "$tmp_log"\n'
         export_cmd+=$'  exit 1\n'
         export_cmd+=$'fi'
-        if dockExec "$container_id" "$export_cmd" false; then
+        if n8n_exec "$container_id" "$export_cmd" false; then
             local host_tmp
-            host_tmp=$(mktemp -t n8n-existing-workflows-XXXXXXXX.json)
+            host_tmp=$(mktemp)
             local docker_cp_snapshot_target
             docker_cp_snapshot_target=$(convert_path_for_docker_cp "$host_tmp")
             [[ -z "$docker_cp_snapshot_target" ]] && docker_cp_snapshot_target="$host_tmp"
-            if docker cp "${container_id}:$container_tmp" "$docker_cp_snapshot_target" >/dev/null 2>&1; then
+            if copy_from_n8n "$container_tmp" "$docker_cp_snapshot_target" "$container_id"; then
                 cli_snapshot_path="$host_tmp"
                 export existing_workflow_snapshot_source="container"
                 log DEBUG "Captured workflow snapshot via CLI export"
             else
                 rm -f "$host_tmp"
-                log WARN "Unable to copy workflow snapshot from container; duplicate detection may be limited."
+                log WARN "Unable to copy workflow snapshot from n8n instance; duplicate detection may be limited."
             fi
-            dockExec "$container_id" "rm -f $container_tmp" false || true
+            n8n_exec "$container_id" "rm -f $container_tmp" false || true
         else
             log WARN "Failed to export workflows from container; proceeding without snapshot."
         fi
@@ -299,10 +299,7 @@ stage_directory_workflows_to_container() {
         return 1
     fi
     
-    if [[ -z "$container_id" ]]; then
-        log ERROR "Container ID required for staging"
-        return 1
-    fi
+    # Container ID can be empty for local execution
     
     log DEBUG "Staging workflows from $source_dir to container $container_id"
     log DEBUG "ID handling: preserve_ids=$preserve_ids, no_overwrite=$no_overwrite"
@@ -310,7 +307,7 @@ stage_directory_workflows_to_container() {
     
     # Create temp staging directory
     local staging_dir
-    staging_dir=$(mktemp -d -t n8n-staging-XXXXXXXX)
+    staging_dir=$(mktemp -d)
     
     # Build existing workflow lookup
     declare -A existing_workflows_by_id=()
@@ -499,8 +496,9 @@ stage_directory_workflows_to_container() {
             fi
 
             log DEBUG "Searching folder \"$(sanitize_log_value "$normalized_folder_path")\" for name match: \"$(sanitize_log_value "$workflow_name")\""
-            if [[ -n "${existing_workflows_by_name_and_folder[$folder_key]:-}" ]]; then
-                local existing_id="${existing_workflows_by_name_and_folder[$folder_key]}"
+            log DEBUG "folder_key: '$folder_key'"
+            if [[ -v existing_workflows_by_name_and_folder["$folder_key"] ]]; then
+                local existing_id="${existing_workflows_by_name_and_folder["$folder_key"]}"
                 log DEBUG "Matched existing workflow ID $existing_id for \"$(sanitize_log_value "$workflow_name")\" (ID: \"$(sanitize_log_value "$original_id")\")"
                 final_id="$existing_id"
                 matched_existing_id="$existing_id"
@@ -808,7 +806,7 @@ stage_directory_workflows_to_container() {
     
     # Create target directory in container
     local create_cmd="rm -rf $container_target_dir && mkdir -p $container_target_dir"
-    if ! dockExec "$container_id" "$create_cmd" false; then
+    if ! n8n_exec "$container_id" "$create_cmd" false; then
         log ERROR "Failed to create container directory: $container_target_dir"
         rm -rf "$staging_dir"
         return 1
@@ -819,8 +817,8 @@ stage_directory_workflows_to_container() {
     local docker_cp_staging_source
     docker_cp_staging_source=$(convert_path_for_docker_cp "$staging_dir/.")
     [[ -z "$docker_cp_staging_source" ]] && docker_cp_staging_source="$staging_dir/."
-    if ! docker cp "$docker_cp_staging_source" "${container_id}:${container_target_dir}/" 2>/dev/null; then
-        log ERROR "Failed to copy workflows to container"
+    if ! copy_to_n8n "$docker_cp_staging_source" "${container_target_dir}/" "$container_id"; then
+        log ERROR "Failed to copy workflows to n8n instance"
         rm -rf "$staging_dir"
         return 1
     fi
@@ -828,6 +826,6 @@ stage_directory_workflows_to_container() {
     # Cleanup
     rm -rf "$staging_dir"
     
-    log DEBUG "Staged $processed workflow(s) in container directory: $container_target_dir"
+    log DEBUG "Staged $processed workflow(s) in n8n directory: $container_target_dir"
     return 0
 }

@@ -67,42 +67,30 @@ push_export_sync_workflows_to_git() {
             return 0
         fi
 
-        if docker exec "$container_id" sh -c "[ -f '$container_workflows' ]"; then
+        if n8n_check_path "$container_id" "$container_workflows" "f"; then
             local cp_workflows_git_output=""
             local docker_cp_git_workflows
             docker_cp_git_workflows=$(convert_path_for_docker_cp "$target_dir/workflows.json")
             [[ -z "$docker_cp_git_workflows" ]] && docker_cp_git_workflows="$target_dir/workflows.json"
-            if ! cp_workflows_git_output=$(docker cp "${container_id}:${container_workflows}" "$docker_cp_git_workflows" 2>&1); then
+            if ! copy_from_n8n "$container_workflows" "$docker_cp_git_workflows" "$container_id"; then
                 log ERROR "Failed to copy workflows to Git repository"
-                if [[ -n "$cp_workflows_git_output" ]]; then
-                    log DEBUG "docker cp error: $cp_workflows_git_output"
-                fi
                 ref_copy_status="failed"
             else
-                if [[ -n "$cp_workflows_git_output" && "$verbose" == "true" ]]; then
-                    log DEBUG "docker cp output: $cp_workflows_git_output"
-                fi
                 if ! push_prettify_json_file "$target_dir/workflows.json" "$is_dry_run"; then
                     log WARN "Failed to prettify workflows JSON in Git repository"
                 fi
                 log SUCCESS "Workflows copied to Git repository"
                 ref_remote_workflows_saved=true
             fi
-        elif docker exec "$container_id" sh -c "[ -d '$container_workflows_dir' ]"; then
+        elif n8n_check_path "$container_id" "$container_workflows_dir" "d"; then
             local cp_workflows_dir_output=""
             local docker_cp_git_workflows_dir
             docker_cp_git_workflows_dir=$(convert_path_for_docker_cp "$target_dir/")
             [[ -z "$docker_cp_git_workflows_dir" ]] && docker_cp_git_workflows_dir="$target_dir/"
-            if ! cp_workflows_dir_output=$(docker cp "${container_id}:${container_workflows_dir}/." "$docker_cp_git_workflows_dir" 2>&1); then
+            if ! copy_from_n8n "${container_workflows_dir}/." "$docker_cp_git_workflows_dir" "$container_id"; then
                 log ERROR "Failed to copy workflow directory to Git repository"
-                if [[ -n "$cp_workflows_dir_output" ]]; then
-                    log DEBUG "docker cp error: $cp_workflows_dir_output"
-                fi
                 ref_copy_status="failed"
             else
-                if [[ -n "$cp_workflows_dir_output" && "$verbose" == "true" ]]; then
-                    log DEBUG "docker cp output: $cp_workflows_dir_output"
-                fi
                 push_prettify_json_tree "$target_dir" "$is_dry_run" || log WARN "Completed workflow JSON prettify with warnings in Git repository"
                 log SUCCESS "Workflows copied to Git repository from directory export"
                 ref_remote_workflows_saved=true
@@ -135,7 +123,7 @@ push_export_sync_credentials_to_git() {
         return 0
     fi
 
-    if ! docker exec "$container_id" sh -c "[ -f '$container_credentials_backup_path' ]"; then
+    if ! n8n_check_path "$container_id" "$container_credentials_backup_path" "f"; then
         return 0
     fi
 
@@ -156,18 +144,12 @@ push_export_sync_credentials_to_git() {
         local docker_cp_git_credentials_bundle
         docker_cp_git_credentials_bundle=$(convert_path_for_docker_cp "$host_credentials_bundle")
         [[ -z "$docker_cp_git_credentials_bundle" ]] && docker_cp_git_credentials_bundle="$host_credentials_bundle"
-        if ! cp_credentials_git_output=$(docker cp "${container_id}:${container_credentials_backup_path}" "$docker_cp_git_credentials_bundle" 2>&1); then
-            log ERROR "Failed to copy credentials bundle from container"
-            if [[ -n "$cp_credentials_git_output" ]]; then
-                log DEBUG "docker cp error: $cp_credentials_git_output"
-            fi
+        if ! copy_from_n8n "$container_credentials_backup_path" "$docker_cp_git_credentials_bundle" "$container_id"; then
+            log ERROR "Failed to copy credentials bundle from n8n instance"
             ref_copy_status="failed"
             return 1
         fi
         ref_credentials_bundle_available=true
-        if [[ -n "$cp_credentials_git_output" && "$verbose" == "true" ]]; then
-            log DEBUG "docker cp output: $cp_credentials_git_output"
-        fi
     fi
 
     if [[ "$ref_copy_status" == "failed" ]]; then
@@ -228,17 +210,10 @@ push_export_sync_environment_to_git() {
     docker_cp_git_env_path=$(convert_path_for_docker_cp "$env_git_path")
     [[ -z "$docker_cp_git_env_path" ]] && docker_cp_git_env_path="$env_git_path"
 
-    if ! cp_env_git_output=$(docker cp "${container_id}:${container_env}" "$docker_cp_git_env_path" 2>&1); then
+    if ! copy_from_n8n "$container_env" "$docker_cp_git_env_path" "$container_id"; then
         log ERROR "Failed to copy environment variables to Git repository"
-        if [[ -n "$cp_env_git_output" ]]; then
-            log DEBUG "docker cp error: $cp_env_git_output"
-        fi
         ref_copy_status="failed"
         return 1
-    fi
-
-    if [[ -n "$cp_env_git_output" && "$verbose" == "true" ]]; then
-        log DEBUG "docker cp output: $cp_env_git_output"
     fi
     log WARN "Environment variables stored in Git repository. Review access controls carefully."
     ref_remote_environment_saved=true
@@ -408,11 +383,11 @@ push_export() {
                 log ERROR "Failed to create local push directory: $local_backup_dir"
                 return 1
             fi
-            chmod 700 "$local_backup_dir" || log WARN "Could not set permissions on local push directory"
+            chmod 700 "$local_backup_dir" 2>/dev/null || log WARN "Could not set permissions on local push directory"
 
             # Also ensure base directory has proper permissions
             if [[ "$local_backup_dir" != "$base_backup_dir" ]]; then
-                chmod 700 "$base_backup_dir" || log WARN "Could not set permissions on base push directory"
+                chmod 700 "$base_backup_dir" 2>/dev/null || log WARN "Could not set permissions on base push directory"
             fi
 
             log SUCCESS "Local push directory ready: $local_backup_dir"
@@ -612,12 +587,19 @@ push_export() {
     local container_workflows_dir="/tmp/workflows"
     if [[ $workflows == 2 ]]; then
         log INFO "Exporting individual workflow files for Git folder structure..."
-        if ! dockExec "$container_id" "mkdir -p $container_workflows_dir" false; then
+        if ! n8n_exec "$container_id" "mkdir -p $container_workflows_dir" false; then
             log ERROR "Failed to create workflows directory in container"
             export_failed=true
-        elif ! dockExec "$container_id" "n8n export:workflow --all --separate --output=$container_workflows_dir/" false; then 
+        elif ! n8n_exec "$container_id" "n8n export:workflow --all --separate --output=$container_workflows_dir/" false; then 
             # Check if the error is due to no workflows existing
-            if docker exec "$container_id" n8n list workflows 2>&1 | grep -q "No workflows found"; then
+            local no_workflows=false
+            if [[ -n "$container_id" ]]; then
+                if docker exec "$container_id" n8n list workflows 2>&1 | grep -q "No workflows found"; then no_workflows=true; fi
+            else
+                if n8n list workflows 2>&1 | grep -q "No workflows found"; then no_workflows=true; fi
+            fi
+
+            if $no_workflows; then
                 log INFO "No workflows found to push - this is a clean installation"
                 no_data_found=true
             else
@@ -627,9 +609,16 @@ push_export() {
         fi
     elif [[ $workflows == 1 ]]; then
         log INFO "Exporting workflows as single file for local storage..."
-        if ! dockExec "$container_id" "n8n export:workflow --all --output=$container_workflows" false; then 
+        if ! n8n_exec "$container_id" "n8n export:workflow --all --output=$container_workflows" false; then 
             # Check if the error is due to no workflows existing
-            if docker exec "$container_id" n8n list workflows 2>&1 | grep -q "No workflows found"; then
+            local no_workflows=false
+            if [[ -n "$container_id" ]]; then
+                if docker exec "$container_id" n8n list workflows 2>&1 | grep -q "No workflows found"; then no_workflows=true; fi
+            else
+                if n8n list workflows 2>&1 | grep -q "No workflows found"; then no_workflows=true; fi
+            fi
+
+            if $no_workflows; then
                 log INFO "No workflows found to push - this is a clean installation"
                 no_data_found=true
             else
@@ -661,17 +650,9 @@ push_export() {
                 log DEBUG "Exporting temporary decrypted credentials for folder structure authentication..."
             fi
 
-            if ! dockExec "$container_id" "$decrypted_cmd" false; then
-                local credentials_list_output
-                credentials_list_output=$(docker exec "$container_id" n8n list credentials 2>&1 || true)
-                if printf '%s' "$credentials_list_output" | grep -q "No credentials found"; then
-                    log INFO "No credentials found to push - this is a clean installation"
-                    no_data_found=true
-                    credentials_available=false
-                else
-                    log ERROR "Failed to export decrypted credentials"
-                    export_failed=true
-                fi
+            if ! n8n_exec "$container_id" "$decrypted_cmd" false; then
+                log ERROR "Failed to export decrypted credentials"
+                export_failed=true
             else
                 decrypted_export_done=true
                 log DEBUG "Decrypted credentials export stored at $container_credentials_decrypted"
@@ -683,17 +664,13 @@ push_export() {
             log INFO "Exporting credentials for $credentials_desc storage..."
             log DEBUG "Exporting credentials in encrypted form (default)"
             local cred_export_cmd="n8n export:credentials --all --output=$container_credentials_encrypted"
-            if ! dockExec "$container_id" "$cred_export_cmd" false; then
-                local credentials_list_output
-                credentials_list_output=$(docker exec "$container_id" n8n list credentials 2>&1 || true)
-                if printf '%s' "$credentials_list_output" | grep -q "No credentials found"; then
-                    log INFO "No credentials found to push - this is a clean installation"
-                    no_data_found=true
-                    credentials_available=false
-                else
-                    log ERROR "Failed to export credentials"
-                    export_failed=true
-                fi
+            
+            if ! n8n_exec "$container_id" "$cred_export_cmd" false; then
+                log ERROR "Failed to export encrypted credentials"
+                export_failed=true
+            else
+                encrypted_export_done=true
+                log DEBUG "Encrypted credentials export stored at $container_credentials_encrypted"
             fi
         fi
     else
@@ -713,7 +690,7 @@ push_export() {
             env_scope="Git repository push"
         fi
         log INFO "Capturing environment variables for $env_scope..."
-        if dockExec "$container_id" "printenv | grep ^N8N_ > $container_env" false; then
+        if n8n_exec "$container_id" "printenv | grep ^N8N_ > $container_env" false; then
             environment_exported=true
         else
             log WARN "Could not capture N8N_ environment variables from container."
@@ -730,7 +707,7 @@ push_export() {
     fi
     
     # Handle workflows locally if requested
-    if [[ $workflows == 1 ]] && docker exec "$container_id" sh -c "[ -f '$container_workflows' ]"; then
+    if [[ $workflows == 1 ]] && n8n_check_path "$container_id" "$container_workflows" "f"; then
         log INFO "Saving workflows to local storage..."
         if $is_dry_run; then
             log DRYRUN "Would copy workflows from container to local storage: $local_workflows_file"
@@ -741,11 +718,8 @@ push_export() {
             local docker_cp_local_workflows
             docker_cp_local_workflows=$(convert_path_for_docker_cp "$local_workflows_file")
             [[ -z "$docker_cp_local_workflows" ]] && docker_cp_local_workflows="$local_workflows_file"
-            if ! cp_local_workflows_output=$(docker cp "${container_id}:${container_workflows}" "$docker_cp_local_workflows" 2>&1); then
+            if ! copy_from_n8n "$container_workflows" "$docker_cp_local_workflows" "$container_id"; then
                 log ERROR "Failed to copy workflows to local storage"
-                if [[ -n "$cp_local_workflows_output" ]]; then
-                    log DEBUG "docker cp error: $cp_local_workflows_output"
-                fi
                 rm -rf "$tmp_dir"
                 return 1
             fi
@@ -753,7 +727,7 @@ push_export() {
             if ! push_prettify_json_file "$local_workflows_file" "$is_dry_run"; then
                 log WARN "Failed to prettify local workflows JSON"
             fi
-            chmod 600 "$local_workflows_file" || log WARN "Could not set permissions on workflows file"
+            chmod 600 "$local_workflows_file" 2>/dev/null || log WARN "Could not set permissions on workflows file"
             log SUCCESS "Workflows stored securely in local storage: $local_workflows_file"
             local_workflows_saved=true
             if [[ -n "$cp_local_workflows_output" && "$verbose" == "true" ]]; then
@@ -776,7 +750,7 @@ push_export() {
     
     # Handle credentials locally  
     if [[ $credentials == 1 ]]; then
-        if docker exec "$container_id" sh -c "[ -f '$container_credentials_backup_path' ]"; then
+        if n8n_check_path "$container_id" "$container_credentials_backup_path" "f"; then
             log INFO "Saving credentials to local secure storage..."
             if $is_dry_run; then
                 log DRYRUN "Would synchronise credentials into directory: $local_credentials_dir"
@@ -786,18 +760,12 @@ push_export() {
                     local docker_cp_local_credentials_bundle
                     docker_cp_local_credentials_bundle=$(convert_path_for_docker_cp "$host_credentials_bundle")
                     [[ -z "$docker_cp_local_credentials_bundle" ]] && docker_cp_local_credentials_bundle="$host_credentials_bundle"
-                    if ! cp_credentials_bundle_output=$(docker cp "${container_id}:${container_credentials_backup_path}" "$docker_cp_local_credentials_bundle" 2>&1); then
+                    if ! copy_from_n8n "$container_credentials_backup_path" "$docker_cp_local_credentials_bundle" "$container_id"; then
                         log ERROR "Failed to copy credentials bundle from container"
-                        if [[ -n "$cp_credentials_bundle_output" ]]; then
-                            log DEBUG "docker cp error: $cp_credentials_bundle_output"
-                        fi
                         rm -rf "$tmp_dir"
                         return 1
                     fi
                     credentials_bundle_available=true
-                    if [[ -n "$cp_credentials_bundle_output" && "$verbose" == "true" ]]; then
-                        log DEBUG "docker cp output: $cp_credentials_bundle_output"
-                    fi
                 fi
 
                 if ! push_render_credentials_directory "$host_credentials_bundle" "$local_credentials_dir" "$is_dry_run" "local secure storage"; then
@@ -828,7 +796,7 @@ push_export() {
     
     # Store .env file in local storage (always local for security)
     if [[ $environment == 1 && $environment_exported == true ]]; then
-        if docker exec "$container_id" sh -c "[ -f '$container_env' ]"; then
+        if n8n_check_path "$container_id" "$container_env" "f"; then
             log INFO "Backing up environment variables to local storage..."
             if $is_dry_run; then
                 log DRYRUN "Would copy .env from container to local storage: $local_env_file"
@@ -838,18 +806,12 @@ push_export() {
                 local docker_cp_local_env_file
                 docker_cp_local_env_file=$(convert_path_for_docker_cp "$local_env_file")
                 [[ -z "$docker_cp_local_env_file" ]] && docker_cp_local_env_file="$local_env_file"
-                if ! cp_env_local_output=$(docker cp "${container_id}:${container_env}" "$docker_cp_local_env_file" 2>&1); then
+                if ! copy_from_n8n "$container_env" "$docker_cp_local_env_file" "$container_id"; then
                     log ERROR "Failed to copy .env file to local storage"
-                    if [[ -n "$cp_env_local_output" ]]; then
-                        log DEBUG "docker cp error: $cp_env_local_output"
-                    fi
                     rm -rf "$tmp_dir"
                     return 1
                 fi
-                if [[ -n "$cp_env_local_output" && "$verbose" == "true" ]]; then
-                    log DEBUG "docker cp output: $cp_env_local_output"
-                fi
-                chmod 600 "$local_env_file" || log WARN "Could not set permissions on .env file"
+                chmod 600 "$local_env_file" 2>/dev/null || log WARN "Could not set permissions on .env file"
                 log SUCCESS ".env file stored securely in local storage: $local_env_file"
                 local_env_saved=true
             fi
@@ -993,7 +955,7 @@ push_export() {
             return 1
         fi
         log INFO "Cleaning up temporary files in container..."
-        if dockExec "$container_id" "rm -f $container_workflows $container_credentials_encrypted $container_credentials_decrypted $container_env" "$is_dry_run"; then
+        if n8n_exec "$container_id" "rm -f $container_workflows $container_credentials_encrypted $container_credentials_decrypted $container_env" "$is_dry_run"; then
             if ! $is_dry_run; then
                 log DEBUG "Temporary workflow and credential exports removed from container"
             fi

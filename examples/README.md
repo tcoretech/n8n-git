@@ -9,11 +9,13 @@ This directory contains examples for using n8n-git in various scenarios.
 Build an n8n container with n8n-git installed inside, enabling workflows to call n8n-git commands via the Execute Command node.
 
 **Build:**
+
 ```bash
 docker build -t n8n-with-git:latest -f examples/Dockerfile.n8n-with-git .
 ```
 
 **Run:**
+
 ```bash
 docker run -d \
   --name n8n \
@@ -26,6 +28,7 @@ docker run -d \
 ```
 
 **Key Features:**
+
 - n8n-git runs directly inside the container (no docker exec needed)
 - Workflows can trigger git operations via Execute Command node
 - No Docker socket access required
@@ -36,19 +39,21 @@ docker run -d \
 ### [`workflow-automated-backup.json`](./workflow-automated-backup.json)
 
 **Automated Daily Backup Workflow**
-
 This workflow runs daily at 2 AM and:
+
 1. Executes `n8n-git push` to back up workflows and credentials
 2. Checks the exit code for success/failure
 3. Sends Slack notifications based on the result
 
 **To use:**
+
 1. Import the workflow into your n8n instance
 2. Configure Slack credentials (or replace with your notification method)
 3. Ensure n8n-git is installed inside the container
 4. Activate the workflow
 
 **Prerequisites:**
+
 - n8n running in a container built with n8n-git (see Dockerfile example)
 - Environment variables configured:
   - `N8N_BASE_URL=http://localhost:5678`

@@ -87,9 +87,7 @@ run_reset_interactive_picker_tests() {
   git config user.name "Interactive Tester"
   git config user.email "interactive@example.com"
 
-  cat >workflow.json <<'JSON'
-{"name":"Alpha","nodes":[]}
-JSON
+  cp "$SCRIPT_DIR/fixtures/workflows/reset-simple_alpha.json" workflow.json
   git add workflow.json
   GIT_AUTHOR_DATE="2025-10-30T10:00:00Z" \
   GIT_COMMITTER_DATE="2025-10-30T10:00:00Z" \
@@ -97,14 +95,14 @@ JSON
   local commit_one
   commit_one=$(git rev-parse HEAD)
 
-  printf '{"name":"Beta","nodes":[]}\n' >workflow.json
+  cp "$SCRIPT_DIR/fixtures/workflows/reset-simple_beta.json" workflow.json
   GIT_AUTHOR_DATE="2025-11-02T15:12:00Z" \
   GIT_COMMITTER_DATE="2025-11-02T15:12:00Z" \
   git commit -qam "midpoint: beta"
   local commit_two
   commit_two=$(git rev-parse HEAD)
 
-  printf '{"name":"Gamma","nodes":[]}\n' >workflow.json
+  cp "$SCRIPT_DIR/fixtures/workflows/reset-simple_gamma.json" workflow.json
   GIT_AUTHOR_DATE="2025-11-05T09:01:00Z" \
   GIT_COMMITTER_DATE="2025-11-05T09:01:00Z" \
   git commit -qam "head: gamma"
@@ -226,25 +224,7 @@ create_workflow_repo() {
   git config user.name "Reset Tester"
   git config user.email "reset@example.com"
 
-  cat >"$WORKFLOWS_DIR/root_alpha.json" <<'JSON'
-{
-  "name": "Root Workflow Alpha",
-  "nodes": [
-    {
-      "parameters": {},
-      "name": "Start",
-      "type": "n8n-nodes-base.start",
-      "typeVersion": 1,
-      "position": [240, 240]
-    }
-  ],
-  "connections": {},
-  "active": false,
-  "settings": {
-    "notes": "Baseline workflow that stays at the root"
-  }
-}
-JSON
+  cp "$SCRIPT_DIR/fixtures/workflows/reset-root_alpha.json" "$WORKFLOWS_DIR/root_alpha.json"
 
   git add workflows
   git commit -m "baseline: root workflow" -q
@@ -253,61 +233,14 @@ JSON
 
   mkdir -p "$WORKFLOWS_DIR/Teams/Support"
 
-  cat >"$WORKFLOWS_DIR/Teams/Support/folder_beta.json" <<'JSON'
-{
-  "name": "Folder Workflow Beta",
-  "nodes": [
-    {
-      "parameters": {
-        "duration": 5,
-        "unit": "seconds"
-      },
-      "name": "Wait",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1,
-      "position": [280, 320]
-    }
-  ],
-  "meta": {
-    "instanceId": "folder-beta-instance"
-  },
-  "connections": {},
-  "active": false,
-  "settings": {
-    "notes": "Resides inside Teams/Support folder"
-  }
-}
-JSON
+  cp "$SCRIPT_DIR/fixtures/workflows/reset-folder_beta.json" "$WORKFLOWS_DIR/Teams/Support/folder_beta.json"
 
   git add workflows/Teams/Support/folder_beta.json
   git commit -m "midpoint: add folder workflow beta" -q
   COMMIT_MID=$(git rev-parse HEAD)
   log INFO "Mid commit: $COMMIT_MID"
 
-  cat >"$WORKFLOWS_DIR/Teams/Support/folder_gamma.json" <<'JSON'
-{
-  "name": "Folder Workflow Gamma",
-  "nodes": [
-    {
-      "parameters": {
-        "value": "Gamma"
-      },
-      "name": "Set",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
-      "position": [320, 360]
-    }
-  ],
-  "meta": {
-    "instanceId": "folder-gamma-instance"
-  },
-  "connections": {},
-  "active": false,
-  "settings": {
-    "notes": "Second workflow inside Teams/Support folder"
-  }
-}
-JSON
+  cp "$SCRIPT_DIR/fixtures/workflows/reset-folder_gamma.json" "$WORKFLOWS_DIR/Teams/Support/folder_gamma.json"
 
   git add workflows/Teams/Support/folder_gamma.json
   git commit -m "head: add folder workflow gamma" -q

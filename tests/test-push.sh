@@ -165,25 +165,7 @@ if [[ -z "$TEST_WORKFLOW_VERSION_ID" ]]; then
     log ERROR "Failed to generate versionId for test workflow"
     exit 1
 fi
-TEST_WORKFLOW=$(cat <<JSON
-{
-  "name": "Test Push Workflow",
-  "nodes": [
-    {
-      "parameters": {},
-      "name": "Start",
-      "type": "n8n-nodes-base.start",
-      "typeVersion": 1,
-      "position": [250, 300]
-    }
-  ],
-  "connections": {},
-  "active": false,
-  "settings": {},
-  "versionId": "$TEST_WORKFLOW_VERSION_ID"
-}
-JSON
-)
+TEST_WORKFLOW=$(sed "s/PLACEHOLDER_VERSION_ID/$TEST_WORKFLOW_VERSION_ID/" "$SCRIPT_DIR/fixtures/workflows/push-workflow-template.json")
 
 TEMP_WORKFLOW=$(testbed_docker exec "$TEST_CONTAINER" mktemp -p /tmp)
 testbed_docker exec "$TEST_CONTAINER" sh -c "cat <<'EOF' > $TEMP_WORKFLOW
@@ -197,19 +179,7 @@ log INFO "Test workflow created"
 
 # 3. Create test credential in container
 log INFO "Creating test credential..."
-TEST_CREDENTIAL='[
-  {
-    "id": "credential-123",
-    "name": "Test Basic Credential",
-    "type": "httpBasicAuth",
-    "typeVersion": 1,
-    "nodesAccess": [],
-    "data": {
-      "user": "test-user",
-      "password": "test-password"
-    }
-  }
-]'
+TEST_CREDENTIAL=$(cat "$SCRIPT_DIR/fixtures/credentials/push-credential.json")
 
 TEMP_CREDENTIAL=$(testbed_docker exec "$TEST_CONTAINER" mktemp -p /tmp)
 testbed_docker exec "$TEST_CONTAINER" sh -c "cat <<'EOF' > $TEMP_CREDENTIAL

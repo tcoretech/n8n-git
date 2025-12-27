@@ -1,0 +1,23 @@
+{
+  "name": "Folder Workflow Beta",
+  "nodes": [
+    {
+      "parameters": {
+        "duration": 5,
+        "unit": "seconds"
+      },
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [280, 320]
+    }
+  ],
+  "meta": {
+    "instanceId": "folder-beta-instance"
+  },
+  "connections": {},
+  "active": false,
+  "settings": {
+    "notes": "Resides inside Teams/Support folder"
+  }
+}

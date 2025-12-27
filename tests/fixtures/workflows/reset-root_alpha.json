@@ -1,0 +1,17 @@
+{
+  "name": "Root Workflow Alpha",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [240, 240]
+    }
+  ],
+  "connections": {},
+  "active": false,
+  "settings": {
+    "notes": "Baseline workflow that stays at the root"
+  }
+}
