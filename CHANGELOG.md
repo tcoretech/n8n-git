@@ -1,9 +1,20 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to n8n Git will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.1.0] - 2025-12-27
+
+### Maintenance
+- release): bump version to 1.1.0
+
+### Other Changes
+- Feat: Enable inside n8n container execution and bootstrapping of n8n-git for use within n8n nodes (#3)
+- Apply consistent formatting to Pull and Reset examples with use case descriptions
+- Update README: split push examples with justifications and add cron backup example
+- Initial plan
 
 ## [1.0.0] - 2025-12-02
 
