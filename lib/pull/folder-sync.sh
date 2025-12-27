@@ -515,7 +515,7 @@ apply_folder_structure_from_directory() {
     
     if [[ -z "$working_manifest" || ! -f "$working_manifest" ]]; then
         log DEBUG "Generating manifest from directory structure..."
-        working_manifest=$(mktemp -t n8n-folder-manifest-XXXXXX.ndjson)
+        working_manifest=$(mktemp /tmp/n8n-folder-manifest-XXXXXX)
         
         if ! generate_workflow_manifest "$source_dir" "$working_manifest"; then
             log ERROR "Failed to generate workflow manifest"
@@ -526,7 +526,7 @@ apply_folder_structure_from_directory() {
     
     # Step 3: Sync directory structure to n8n
     local audit_log
-    audit_log=$(mktemp -t n8n-folder-audit-XXXXXX.ndjson)
+    audit_log=$(mktemp /tmp/n8n-folder-audit-XXXXXX)
     
     if ! sync_directory_structure "$source_dir" "$working_manifest" "$is_dry_run" "$audit_log"; then
         log WARN "Folder structure sync completed with errors"

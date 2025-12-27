@@ -196,44 +196,45 @@ ensure_n8n_session_credentials() {
     fi
 
     if [[ "$skip_export" != "true" ]]; then
-        if ! dockExec "$container_id" "n8n export:credentials --all --output='$lookup_export_path'" false; then
+        if ! n8n_exec "$container_id" "n8n export:credentials --all --output='$lookup_export_path'" false; then
             cleanup_temp_path "$host_tmp_dir"
             if [[ "$remove_lookup_file" == "true" ]]; then
-                dockExec "$container_id" "rm -f '$lookup_export_path'" false >/dev/null 2>&1 || true
+                n8n_exec "$container_id" "rm -f '$lookup_export_path'" false >/dev/null 2>&1 || true
             fi
-            log ERROR "Failed to export credentials from n8n container to locate '$credential_name'."
+            log ERROR "Failed to export credentials from n8n instance to locate '$credential_name'."
             return 1
         fi
     fi
 
-    local cp_output=""
     local used_exec_fallback="false"
-    if ! cp_output=$(docker cp "${container_id}:${lookup_export_path}" "$docker_cp_lookup_target" 2>&1); then
-        if [[ -n "$cp_output" ]]; then
-            log WARN "docker cp failed while retrieving session credentials: ${cp_output//$'\n'/ }"
-        fi
+    if ! copy_from_n8n "$lookup_export_path" "$docker_cp_lookup_target" "$container_id"; then
+        log WARN "Failed to retrieve session credentials via copy."
 
-        local fallback_err_file="$host_tmp_dir/exec-fallback.err"
-        if docker exec "$container_id" sh -c "cat '$lookup_export_path'" >"$host_lookup_file" 2>"$fallback_err_file"; then
-            used_exec_fallback="true"
-            if [[ "$verbose" == "true" ]]; then
-                log DEBUG "Streamed exported credentials via docker exec fallback."
+        if [[ -n "$container_id" ]]; then
+            local fallback_err_file="$host_tmp_dir/exec-fallback.err"
+            if docker exec "$container_id" sh -c "cat '$lookup_export_path'" >"$host_lookup_file" 2>"$fallback_err_file"; then
+                used_exec_fallback="true"
+                if [[ "$verbose" == "true" ]]; then
+                    log DEBUG "Streamed exported credentials via docker exec fallback."
+                fi
+                rm -f "$fallback_err_file"
+            else
+                local fallback_error=""
+                if [[ -s "$fallback_err_file" ]]; then
+                    fallback_error=$(tr -d '\r' <"$fallback_err_file")
+                fi
+                rm -f "$fallback_err_file"
+                cleanup_temp_path "$host_tmp_dir"
+                if [[ "$remove_lookup_file" == "true" ]]; then
+                    n8n_exec "$container_id" "rm -f '$lookup_export_path'" false >/dev/null 2>&1 || true
+                fi
+                log ERROR "Unable to copy exported credentials from n8n instance."
+                if [[ -n "$fallback_error" && "$verbose" == "true" ]]; then
+                    log DEBUG "docker exec fallback error: ${fallback_error//$'\n'/ }"
+                fi
+                return 1
             fi
-            rm -f "$fallback_err_file"
         else
-            local fallback_error=""
-            if [[ -s "$fallback_err_file" ]]; then
-                fallback_error=$(tr -d '\r' <"$fallback_err_file")
-            fi
-            rm -f "$fallback_err_file"
-            cleanup_temp_path "$host_tmp_dir"
-            if [[ "$remove_lookup_file" == "true" ]]; then
-                dockExec "$container_id" "rm -f '$lookup_export_path'" false >/dev/null 2>&1 || true
-            fi
-            log ERROR "Unable to copy exported credentials from n8n container."
-            if [[ -n "$fallback_error" && "$verbose" == "true" ]]; then
-                log DEBUG "docker exec fallback error: ${fallback_error//$'\n'/ }"
-            fi
             return 1
         fi
     fi
@@ -243,17 +244,17 @@ ensure_n8n_session_credentials() {
         copied_name=$(basename "$lookup_export_path")
         if [[ ! -f "$host_tmp_dir/$copied_name" ]]; then
             cleanup_temp_path "$host_tmp_dir"
-            log ERROR "Exported credentials file '$copied_name' missing after docker cp."
+            log ERROR "Exported credentials file '$copied_name' missing after copy operation."
             return 1
         fi
         mv "$host_tmp_dir/$copied_name" "$host_lookup_file"
         if [[ -n "$cp_output" && "$verbose" == "true" ]]; then
-            log DEBUG "docker cp output: ${cp_output//$'\n'/ }"
+            log DEBUG "copy output: ${cp_output//$'\n'/ }"
         fi
     fi
 
     if [[ "$remove_lookup_file" == "true" ]]; then
-        dockExec "$container_id" "rm -f '$lookup_export_path'" false >/dev/null 2>&1 || true
+        n8n_exec "$container_id" "rm -f '$lookup_export_path'" false >/dev/null 2>&1 || true
     fi
 
     if ! jq empty "$host_lookup_file" >/dev/null 2>&1; then
@@ -286,40 +287,42 @@ ensure_n8n_session_credentials() {
     local targeted_container_path
     targeted_container_path="/tmp/n8n-session-credential-${credential_id}.json"
 
-    if ! dockExec "$container_id" "n8n export:credentials --id='$credential_id' --decrypted --output='$targeted_container_path'" false; then
+    if ! n8n_exec "$container_id" "n8n export:credentials --id='$credential_id' --decrypted --output='$targeted_container_path'" false; then
         cleanup_temp_path "$host_tmp_dir"
-        dockExec "$container_id" "rm -f '$targeted_container_path'" false >/dev/null 2>&1 || true
+        n8n_exec "$container_id" "rm -f '$targeted_container_path'" false >/dev/null 2>&1 || true
         log ERROR "Failed to export credential '$credential_name' using targeted ID."
         return 1
     fi
 
     local host_target_file="$host_tmp_dir/credential.target.json"
     local docker_cp_target_dir="$docker_cp_lookup_target"
-    local target_copy_output=""
     local target_fallback_used="false"
-    if ! target_copy_output=$(docker cp "${container_id}:${targeted_container_path}" "$docker_cp_target_dir" 2>&1); then
-        if [[ -n "$target_copy_output" ]]; then
-            log WARN "docker cp failed while retrieving targeted credential: ${target_copy_output//$'\n'/ }"
-        fi
-        local target_err="$host_tmp_dir/targeted-copy.err"
-        if docker exec "$container_id" sh -c "cat '$targeted_container_path'" >"$host_target_file" 2>"$target_err"; then
-            target_fallback_used="true"
-            if [[ "$verbose" == "true" ]]; then
-                log DEBUG "Streamed targeted credential export via docker exec fallback."
+    if ! copy_from_n8n "$targeted_container_path" "$docker_cp_target_dir" "$container_id"; then
+        log WARN "Failed to retrieve targeted credential via copy."
+        
+        if [[ -n "$container_id" ]]; then
+            local target_err="$host_tmp_dir/targeted-copy.err"
+            if docker exec "$container_id" sh -c "cat '$targeted_container_path'" >"$host_target_file" 2>"$target_err"; then
+                target_fallback_used="true"
+                if [[ "$verbose" == "true" ]]; then
+                    log DEBUG "Streamed targeted credential export via docker exec fallback."
+                fi
+                rm -f "$target_err"
+            else
+                local fallback_error=""
+                if [[ -s "$target_err" ]]; then
+                    fallback_error=$(tr -d '\r' <"$target_err")
+                fi
+                rm -f "$target_err"
+                cleanup_temp_path "$host_tmp_dir"
+                n8n_exec "$container_id" "rm -f '$targeted_container_path'" false >/dev/null 2>&1 || true
+                log ERROR "Unable to copy targeted credential export from container."
+                if [[ -n "$fallback_error" && "$verbose" == "true" ]]; then
+                    log DEBUG "docker exec fallback error: ${fallback_error//$'\n'/ }"
+                fi
+                return 1
             fi
-            rm -f "$target_err"
         else
-            local fallback_error=""
-            if [[ -s "$target_err" ]]; then
-                fallback_error=$(tr -d '\r' <"$target_err")
-            fi
-            rm -f "$target_err"
-            cleanup_temp_path "$host_tmp_dir"
-            dockExec "$container_id" "rm -f '$targeted_container_path'" false >/dev/null 2>&1 || true
-            log ERROR "Unable to copy targeted credential export from container."
-            if [[ -n "$fallback_error" && "$verbose" == "true" ]]; then
-                log DEBUG "docker exec fallback error: ${fallback_error//$'\n'/ }"
-            fi
             return 1
         fi
     fi
@@ -329,7 +332,7 @@ ensure_n8n_session_credentials() {
         targeted_name=$(basename "$targeted_container_path")
         if [[ ! -f "$host_tmp_dir/$targeted_name" ]]; then
             cleanup_temp_path "$host_tmp_dir"
-            dockExec "$container_id" "rm -f '$targeted_container_path'" false >/dev/null 2>&1 || true
+            n8n_exec "$container_id" "rm -f '$targeted_container_path'" false >/dev/null 2>&1 || true
             log ERROR "Targeted credential export '$targeted_name' missing after docker cp."
             return 1
         fi
@@ -339,7 +342,7 @@ ensure_n8n_session_credentials() {
         fi
     fi
 
-    dockExec "$container_id" "rm -f '$targeted_container_path'" false >/dev/null 2>&1 || true
+    n8n_exec "$container_id" "rm -f '$targeted_container_path'" false >/dev/null 2>&1 || true
 
     if ! jq empty "$host_target_file" >/dev/null 2>&1; then
         cleanup_temp_path "$host_tmp_dir"

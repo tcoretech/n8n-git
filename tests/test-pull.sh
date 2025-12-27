@@ -190,64 +190,9 @@ mkdir -p \
   "$PULL_BASE/Personal/Project1" \
   "$PULL_BASE/Personal/Project2"
 
-cat <<'JSON' >"$PULL_BASE/Personal/Projects/Folder/Subfolder/001_bad_id.json"
-{
-  "id": "wf-1",
-  "name": "Bad ID Workflow",
-  "nodes": [
-    {
-      "parameters": {},
-      "name": "Start",
-      "type": "n8n-nodes-base.start",
-      "typeVersion": 1,
-      "position": [240, 240]
-    }
-  ],
-  "meta": {
-    "instanceId": "test-instance-1"
-  },
-  "connections": {}
-}
-JSON
-
-cat <<'JSON' >"$PULL_BASE/Personal/002_no_id.json"
-{
-  "name": "No ID Workflow",
-  "nodes": [
-    {
-      "parameters": {},
-      "name": "When Webhook Calls",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [240, 240]
-    }
-  ],
-  "meta": {
-    "instanceId": "test-instance-2"
-  },
-  "connections": {}
-}
-JSON
-
-cat <<'JSON' >"$PULL_BASE/Personal/Project1/003_correct.json"
-{
-  "id": "12345678abcdefgh",
-  "name": "Correct ID Workflow",
-  "nodes": [
-    {
-      "parameters": {},
-      "name": "Cron",
-      "type": "n8n-nodes-base.cron",
-      "typeVersion": 1,
-      "position": [240, 240]
-    }
-  ],
-  "meta": {
-    "instanceId": "test-instance-3"
-  },
-  "connections": {}
-}
-JSON
+cp "$SCRIPT_DIR/fixtures/workflows/pull-001_bad_id.json" "$PULL_BASE/Personal/Projects/Folder/Subfolder/001_bad_id.json"
+cp "$SCRIPT_DIR/fixtures/workflows/pull-002_no_id.json" "$PULL_BASE/Personal/002_no_id.json"
+cp "$SCRIPT_DIR/fixtures/workflows/pull-003_correct.json" "$PULL_BASE/Personal/Project1/003_correct.json"
 
 cat <<'JSON' >"$PULL_BASE/Personal/Project2/004_duplicate.json"
 {

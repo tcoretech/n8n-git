@@ -1,0 +1,38 @@
+# Example Dockerfile: Adding n8n-git to the official n8n image
+# This approach uses a multi-stage build to copy 'apk' from Alpine
+# so that we can install dependencies (git, curl, bash) into the n8n image.
+
+# Stage 1: Get apk tools from Alpine
+FROM alpine:3.23 AS builder
+
+# Stage 2: Build the final image
+FROM n8nio/n8n:latest
+USER root
+
+# Restore apk from builder
+COPY --from=builder /sbin/apk /sbin/apk
+COPY --from=builder /lib/apk /lib/apk
+COPY --from=builder /etc/apk /etc/apk
+COPY --from=builder /usr/share/apk /usr/share/apk
+COPY --from=builder /usr/lib/libapk.so.3.0.0 /usr/lib/libapk.so.3.0.0
+COPY --from=builder /usr/lib/libssl.so.3 /usr/lib/libssl.so.3
+COPY --from=builder /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so.3
+
+# Install dependencies required by n8n-git
+RUN apk update && apk add --no-cache \
+    git \
+    curl \
+    bash \
+    jq \
+    openssh-client \
+    && rm -rf /var/cache/apk/*
+
+# Install n8n-git
+# Note: In a real deployment, you might pin a specific version or commit
+RUN curl -fsSL https://raw.githubusercontent.com/tcoretech/n8n-git/main/install.sh | bash
+
+# Create directory for n8n-git configuration
+RUN mkdir -p /home/node/.config/n8n-git && \
+    chown -R node:node /home/node/.config/n8n-git
+
+USER node

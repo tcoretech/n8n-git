@@ -1514,18 +1514,9 @@ command_exists() {
 check_host_dependencies() {
     log INFO "Checking host dependencies..."
     local missing_deps=""
-    if ! command_exists docker; then
-        missing_deps="$missing_deps docker"
-    fi
-    if ! command_exists git; then
-        missing_deps="$missing_deps git"
-    fi
-    if ! command_exists curl; then # Added curl check
-        missing_deps="$missing_deps curl"
-    fi
-    if ! command_exists jq; then # Added jq for JSON parsing
-        missing_deps="$missing_deps jq"
-    fi
+    if ! command_exists git; then missing_deps="$missing_deps git"; fi
+    if ! command_exists curl; then missing_deps="$missing_deps curl"; fi
+    if ! command_exists jq; then missing_deps="$missing_deps jq"; fi
 
     if [ -n "$missing_deps" ]; then
         log ERROR "Missing required host dependencies:$missing_deps"
@@ -1533,11 +1524,37 @@ check_host_dependencies() {
         exit 1
     fi
 
-    if ! ensure_docker_available; then
+    local execution_env_found=false
+    
+    # Check for local n8n
+    if command_exists n8n; then
+        execution_env_found=true
+    fi
+
+    # Check for Docker
+    if command_exists docker; then
+        # Check if docker is available. Suppress output if we already have n8n,
+        # as we might not need docker.
+        if [ "$execution_env_found" = "true" ]; then
+            if ensure_docker_available >/dev/null 2>&1; then
+                : # Docker is available too, good.
+            fi
+        else
+            # If no n8n, we MUST have docker working
+            if ! ensure_docker_available; then
+                exit 1
+            fi
+            execution_env_found=true
+        fi
+    fi
+
+    if [ "$execution_env_found" = "false" ]; then
+        log ERROR "Neither Docker nor local n8n found."
+        log INFO "Please install Docker (and ensure it's running) OR install n8n locally."
         exit 1
     fi
 
-    log SUCCESS "All required host dependencies are available"
+    log SUCCESS "Dependencies check passed"
 }
 
 load_config() {
@@ -2116,7 +2133,7 @@ check_github_access() {
     esac
 }
 
-dockExec() {
+n8n_exec() {
     local container_id="$1"
     local cmd="$2"
     local is_dry_run=$3
@@ -2124,9 +2141,15 @@ dockExec() {
     local exit_code=0
 
     if $is_dry_run; then
-        log DRYRUN "Would execute in container $container_id: $cmd"
+        if [[ -n "$container_id" ]]; then
+            log DRYRUN "Would execute in container $container_id: $cmd"
+        else
+            log DRYRUN "Would execute locally: $cmd"
+        fi
         return 0
-    else
+    fi
+
+    if [[ -n "$container_id" ]]; then
         log DEBUG "Executing in container $container_id: $cmd"
         local -a exec_cmd=("docker" "exec")
         if [[ -n "${DOCKER_EXEC_USER:-}" ]]; then
@@ -2134,29 +2157,32 @@ dockExec() {
         fi
         exec_cmd+=("$container_id" "sh" "-c" "$cmd")
         output=$("${exec_cmd[@]}" 2>&1) || exit_code=$?
-
-        local filtered_output=""
-        if [ -n "$output" ]; then
-            filtered_output=$(echo "$output" | grep -vE 'OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS|N8N_BLOCK_ENV_ACCESS_IN_NODE|Error tracking disabled|DB_SQLITE_POOL_SIZE|N8N_RUNNERS_ENABLED|N8N_GIT_NODE_DISABLE_BARE_REPOS|There are deprecations related to your environment variables' || true)
-        fi
-        
-        if [ "${verbose:-false}" = "true" ] && [ -n "$filtered_output" ]; then
-            log DEBUG $'Container output:\n  '"${filtered_output//$'\n'/$'\n  '}"
-        fi
-        
-        if [ $exit_code -ne 0 ]; then
-            log ERROR "Command failed in container (Exit Code: $exit_code): $cmd"
-            if [ "${verbose:-false}" != "true" ] && [ -n "$filtered_output" ]; then
-                log ERROR $'Container output:\n  '"${filtered_output//$'\n'/$'\n  '}"
-            fi
-            return 1
-        fi
-        
-        return 0
+    else
+        log DEBUG "Executing locally: $cmd"
+        output=$(sh -c "$cmd" 2>&1) || exit_code=$?
     fi
+
+    local filtered_output=""
+    if [ -n "$output" ]; then
+        filtered_output=$(echo "$output" | grep -vE 'OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS|N8N_BLOCK_ENV_ACCESS_IN_NODE|Error tracking disabled|DB_SQLITE_POOL_SIZE|N8N_RUNNERS_ENABLED|N8N_GIT_NODE_DISABLE_BARE_REPOS|There are deprecations related to your environment variables|Could not find workflow' || true)
+    fi
+    
+    if [ "${verbose:-false}" = "true" ] && [ -n "$filtered_output" ]; then
+        log DEBUG $'Output:\n  '"${filtered_output//$'\n'/$'\n  '}"
+    fi
+    
+    if [ $exit_code -ne 0 ]; then
+        log ERROR "Command failed (Exit Code: $exit_code): $cmd"
+        if [ "${verbose:-false}" != "true" ] && [ -n "$filtered_output" ]; then
+            log ERROR $'Output:\n  '"${filtered_output//$'\n'/$'\n  '}"
+        fi
+        return 1
+    fi
+    
+    return 0
 }
 
-dockExecAsRoot() {
+n8n_exec_root() {
     local container_id="$1"
     local cmd="$2"
     local is_dry_run=$3
@@ -2164,28 +2190,78 @@ dockExecAsRoot() {
     local exit_code=0
 
     if $is_dry_run; then
-        log DRYRUN "Would execute as root in container $container_id: $cmd"
+        if [[ -n "$container_id" ]]; then
+            log DRYRUN "Would execute as root in container $container_id: $cmd"
+        else
+            log DRYRUN "Would execute locally (as current user): $cmd"
+        fi
         return 0
-    else
+    fi
+
+    if [[ -n "$container_id" ]]; then
         log DEBUG "Executing as root in container $container_id: $cmd"
         local -a exec_cmd=("docker" "exec" "--user" "root" "$container_id" "sh" "-c" "$cmd")
         output=$("${exec_cmd[@]}" 2>&1) || exit_code=$?
+    else
+        log DEBUG "Executing locally: $cmd"
+        output=$(sh -c "$cmd" 2>&1) || exit_code=$?
+    fi
 
-        if [ "${verbose:-false}" = "true" ] && [ -n "$output" ]; then
-            log DEBUG $'Container output (root):\n  '"${output//$'\n'/$'\n  '}"
+    if [ "${verbose:-false}" = "true" ] && [ -n "$output" ]; then
+        log DEBUG $'Output:\n  '"${output//$'\n'/$'\n  '}"
+    fi
+
+    if [ $exit_code -ne 0 ]; then
+        log ERROR "Command failed (Exit Code: $exit_code): $cmd"
+        if [ "${verbose:-false}" != "true" ] && [ -n "$output" ]; then
+            log ERROR $'Output:\n  '"${output//$'\n'/$'\n  '}"
         fi
+        return 1
+    fi
+    
+    return 0
+}
 
-        if [ $exit_code -ne 0 ]; then
-            log ERROR "Command failed as root in container (Exit Code: $exit_code): $cmd"
-            if [ "${verbose:-false}" != "true" ] && [ -n "$output" ]; then
-                log ERROR $'Container output (root):\n  '"${output//$'\n'/$'\n  '}"
-            fi
-            return 1
-        fi
+n8n_check_path() {
+    local container_id="$1"
+    local path="$2"
+    local type="${3:-f}" # f for file, d for directory
 
-        return 0
+    if [[ -n "$container_id" ]]; then
+        docker exec "$container_id" sh -c "[ -$type '$path' ]"
+    else
+        [ -$type "$path" ]
     fi
 }
+
+copy_from_n8n() {
+    local source_path="$1"
+    local dest_path="$2"
+    local container_id="$3"
+    
+    if [[ -n "$container_id" ]]; then
+        log DEBUG "Copying from container $container_id:$source_path to $dest_path"
+        docker cp "${container_id}:${source_path}" "$dest_path"
+    else
+        log DEBUG "Copying locally from $source_path to $dest_path"
+        cp -r "$source_path" "$dest_path"
+    fi
+}
+
+copy_to_n8n() {
+    local source_path="$1"
+    local dest_path="$2"
+    local container_id="$3"
+    
+    if [[ -n "$container_id" ]]; then
+        log DEBUG "Copying from $source_path to container $container_id:$dest_path"
+        docker cp "$source_path" "${container_id}:${dest_path}"
+    else
+        log DEBUG "Copying locally from $source_path to $dest_path"
+        cp -r "$source_path" "$dest_path"
+    fi
+}
+
 
 timestamp() {
     date "+%Y-%m-%d_%H-%M-%S"

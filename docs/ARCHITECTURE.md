@@ -7,6 +7,7 @@
 n8n-git is a Bash-based CLI tool that provides bidirectional synchronization between n8n workflow instances (running in Docker) and Git repositories. It preserves n8n's project and folder hierarchy in the Git directory structure and reconstructs it during pull operations.
 
 **Core Capabilities**:
+
 - **Push**: Export workflows/credentials/environment from n8n → Git/local storage
 - **Pull**: Import workflows/credentials/environment from Git/local storage → n8n
 - **Reset**: Time-travel through Git history to restore/archive/delete workflows
@@ -15,7 +16,7 @@ n8n-git is a Bash-based CLI tool that provides bidirectional synchronization bet
 
 ### Core Modules
 
-```
+```text
 n8n-git.sh          ← Entry point: CLI parsing, config resolution, command dispatch
 │
 ├── lib/utils/
@@ -56,6 +57,18 @@ n8n-git.sh          ← Entry point: CLI parsing, config resolution, command dis
     └── common.sh          ← Reset utilities: logging, validation, safety checks
 ```
 
+### Execution Abstraction
+
+The core `n8n_exec()` function provides transparent execution of n8n CLI commands regardless of environment:
+
+- **Container specified**: Uses `docker exec` to run commands in container
+- **No container specified**: Attempts direct execution of n8n CLI on host
+- **Neither available**: Interactive container selection (if TTY)
+
+This is not a "mode" - it's intelligent execution path selection based on available resources and user input.
+
+File operations follow the same pattern via `copy_from_n8n()` and `copy_to_n8n()` helper functions, which abstract away the difference between `docker cp` and local `cp`.
+
 ### Configuration Precedence
 
 Settings are resolved in this order (highest to lowest priority):
@@ -87,7 +100,7 @@ Detailed flow documentation is organized by operation:
 ### Quick Reference
 
 | Operation | Entry Function | Key Modules | Primary APIs |
-|-----------|---------------|-------------|--------------|
+| ----------- | --------------- | ------------- | -------------- |
 | **Push** | `push_export()` | `lib/push/*`, `lib/github/git.sh` | `GET /api/v1/workflows`, `n8n export:workflow` |
 | **Pull** | `pull_import()` | `lib/pull/*`, `lib/n8n/*` | `GET /api/v1/projects`, `POST /api/v1/workflows/folders`, `PATCH /rest/workflows/{id}` |
 | **Reset** | `main_reset()` | `lib/reset/*`, reuses pull pipeline | `POST /rest/workflows/{id}/archive`, `DELETE /rest/workflows/{id}` |
@@ -150,7 +163,7 @@ Supports dynamic path generation with token substitution in `GITHUB_PATH` config
 ### Available Tokens
 
 | Token Category | Tokens | Example Output |
-|---------------|---------|----------------|
+| --------------- | --------- | ---------------- |
 | **Date/Time** | `%DATE%` | `2025-11-09` |
 | | `%DATETIME%`, `%TIME%` | `2025-11-09_14-30-45` |
 | | `%YYYY%`, `%YY%` | `2025`, `25` |
@@ -330,7 +343,7 @@ Workflow IDs must be exactly 16 alphanumeric characters. During staging:
 ### API Call Optimization
 
 | Operation | Base Calls | Additional Calls |
-|-----------|------------|------------------|
+| ----------- | ------------ | ------------------ |
 | **Push** | 1 (workflows list) | +1 per project, +1 per folder (for mapping) |
 | **Pull** | 3 (projects, folders, workflows) | +1 per missing folder, +1 per workflow assignment |
 | **Reset** | Same as pull | +1 per archive, +1 per delete (hard mode) |
@@ -382,226 +395,10 @@ log SECURITY "Credentials will be encrypted"  # Security warnings
 **Alpine containers**: Uses `/bin/ash`, handles busybox limitations  
 **Debian/Ubuntu**: Uses `/bin/bash`, full GNU utilities
 
-**Detected automatically** via `dockExec()` wrapper in `lib/utils/common.sh`:
+**Detected automatically** via `n8n_exec()` wrapper in `lib/utils/common.sh`:
 
 ```bash
-dockExec() {
-  local container="$1"
-  local command="$2"
-  local is_dry_run="${3:-false}"
-  
-  if [[ "$is_dry_run" == "true" ]]; then
-    log DRYRUN "Would execute in container: $command"
-    return 0
-  fi
-  
-  docker exec "$container" sh -c "$command"
-}
-```
-
-## Testing
-
-### Test Scripts (`tests/`)
-
-- **test-syntax.sh** — Bash syntax validation (all scripts)
-- **test-shellcheck.sh** — ShellCheck linting (all scripts)
-- **test-push.sh** — Push regression suite (Docker-based)
-- **test-pull.sh** — Pull idempotency, ID sanitization, folder reassignment
-- **test-reset.sh** — Reset flow validation, mode testing
-
-### Makefile Shortcuts
-
-```bash
-make lint    # Runs syntax + ShellCheck
-make test    # Full regression suite
-make package # Stages release files in dist/
-```
-
-### CI/CD
-
-`.github/workflows/ci.yml` runs 5-job pipeline:
-
-1. Syntax validation
-2. ShellCheck linting
-3. Push test
-4. Pull test
-5. Reset test
-
-**Requirement**: All tests must pass before merge/release.
-
-## Development Guidelines
-
-### Adding New Features
-
-1. **Identify affected modules**: Push, pull, reset, or shared utilities?
-2. **Update configuration**: Add new settings to `.config.example`
-3. **Preserve backward compatibility**: Support old config formats
-4. **Add logging**: Use `log DEBUG` for detailed output, `log INFO` for user-facing
-5. **Handle dry-run**: Skip destructive operations when `is_dry_run=true`
-6. **Update tests**: Add test cases in `tests/test-*.sh`
-7. **Document**: Update README.md and operation-specific docs (push.md, pull.md, reset.md)
-
-### Code Conventions
-
-**Quoting**:
-
-```bash
-# Always quote variables
-local value="$var"
-command --arg "$var"
-
-# Array expansion
-command "${array[@]}"
-```
-
-**Functions**:
-
-```bash
-my_function() {
-  local param1="$1"
-  local param2="${2:-default}"  # Optional with default
-  
-  # Function logic
-  
-  return 0  # Success
-}
-```
-
-**Return Values**:
-
-- `return 0` — Success
-- `return 1` — General failure
-- `return 2` — Validation failure / special condition
-- `return 130` — User abort (interactive picker)
-
-**Arrays**:
-
-```bash
-declare -a indexed_array=()     # Indexed array
-declare -A assoc_array=()       # Associative array
-declare -g -A global_map=()     # Global associative array
-```
-
-**Subprocess Errors**:
-
-```bash
-if ! command; then
-  log ERROR "Command failed"
-  return 1
-fi
-
-# OR
-if command; then
-  log SUCCESS "Command succeeded"
-else
-  log ERROR "Command failed"
-  return 1
-fi
-```
-
-### Module Boundaries
-
-**Dependency Rules**:
-
-- **lib/utils/common.sh** — No dependencies on other modules (foundation)
-- **lib/push/export.sh** — May import: `utils/common.sh`, `github/git.sh`, `n8n/n8n-api.sh`, `push/*`
-- **lib/pull/import.sh** — May import: `utils/common.sh`, `n8n/n8n-api.sh`, `github/git.sh`, `pull/*`
-- **lib/pull/*** modules — May import: `utils/common.sh`, `n8n/n8n-api.sh`, but NOT parent `import.sh`
-- **lib/n8n/n8n-api.sh** — Self-contained, handles own auth state
-- **lib/reset/reset.sh** — Reuses pull pipeline modules
-
-**Shared State**:
-
-- Config variables exported in `n8n-git.sh`
-- Folder cache populated in `folder-state.sh`, read by other pull modules
-- Session auth managed in `n8n-api.sh`, accessed globally
-
-## Troubleshooting Tips for AI Tools
-
-### When Debugging Pull Issues
-
-1. **Check manifest**: `cat /tmp/workflow-manifest-*.ndjson`
-2. **Check folder cache**: Enable `--verbose`, grep for "Cache hit" / "Cache miss"
-3. **Check API responses**: Look for "API request failed" in logs
-4. **Check ID conflicts**: Search logs for "ID conflict" or "sanitizing"
-
-### When Extending Functionality
-
-1. Read `lib/utils/common.sh` first (logging, config loading, Docker helpers)
-2. Understand configuration precedence (CLI > local > user > default)
-3. Test with `--dry-run --verbose` to see full execution flow
-4. Use `grep "function " lib/**/*.sh` to find entry points
-
-### Common Patterns
-
-**Loading Config Value with Fallback**:
-
-```bash
-local value="${config_var:-default_value}"
-```
-
-**Checking Dry-Run**:
-
-```bash
-if [[ "$is_dry_run" == "true" ]]; then
-  log DRYRUN "Would execute: $command"
-  return 0
-fi
-```
-
-**Safe Docker Execution**:
-
-```bash
-if ! dockExec "$container_id" "command" "$is_dry_run"; then
-  log ERROR "Command failed"
-  return 1
-fi
-```
-
-**Iterating Manifest**:
-
-```bash
-while IFS= read -r entry_line; do
-  local id=$(jq -r '.id // ""' <<< "$entry_line")
-  local name=$(jq -r '.name // ""' <<< "$entry_line")
-  # Process entry...
-done < "$manifest_path"
-```
-
-## Related Documentation
-
-- **[Push Operations](push.md)** — Detailed push flow, functions, examples
-- **[Pull Operations](pull.md)** — Detailed pull flow, folder sync, validation
-- **[Reset Operations](reset.md)** — Time travel, interactive picker, modes
-- **[User Guide](../README.md)** — Installation, configuration, features
-- **[Configuration Reference](../.config.example)** — All settings explained
-- **[Changelog](../CHANGELOG.md)** — Version history
-
-
-### Logging Levels
-
-**Function**: `log LEVEL "message"` (in `lib/utils/common.sh`)
-
-```bash
-log HEADER "Starting Push Operation"
-log INFO "Cloning repository..."
-log WARN "API key not found, using session auth"
-log ERROR "Failed to create folder"
-log SUCCESS "Push complete"
-log DEBUG "Cache hit: folder-abc-123"  # Only if --verbose
-log DRYRUN "Would execute: git push"   # Only if --dry-run
-log SECURITY "Credentials will be encrypted"  # Security warnings
-```
-
-### Docker Compatibility
-
-**Alpine containers**: Uses `/bin/ash`, handles busybox limitations  
-**Debian/Ubuntu**: Uses `/bin/bash`, full GNU utilities
-
-**Detected automatically** via `dockExec()` wrapper in `lib/utils/common.sh`:
-
-```bash
-dockExec() {
+n8n_exec() {
   local container="$1"
   local command="$2"
   local is_dry_run="${3:-false}"

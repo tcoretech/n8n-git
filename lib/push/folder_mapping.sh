@@ -191,7 +191,7 @@ push_organize_workflows_by_folders() {
     fi
 
     local mapping_file
-    mapping_file=$(mktemp -t n8n-workflow-mapping-XXXXXXXX.json)
+    mapping_file=$(mktemp /tmp/n8n-workflow-mapping-XXXXXXXX)
     printf '%s' "$mapping_json" > "$mapping_file"
 
     if ! jq -e '.workflowsById | type == "object"' "$mapping_file" >/dev/null 2>&1; then

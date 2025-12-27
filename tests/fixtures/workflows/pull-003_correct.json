@@ -1,0 +1,17 @@
+{
+  "id": "12345678abcdefgh",
+  "name": "Correct ID Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 240]
+    }
+  ],
+  "meta": {
+    "instanceId": "test-instance-3"
+  },
+  "connections": {}
+}

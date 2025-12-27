@@ -259,7 +259,7 @@ launch_interactive_picker() {
     head_short=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
     log INFO "Interactive picker inspecting ${repo_label} (branch: ${branch_label}, HEAD: ${head_short})"
 
-    capture_file=$(mktemp -t n8n-reset-picker-XXXXXX)
+    capture_file=$(mktemp /tmp/n8n-reset-picker-XXXXXX)
     if [[ -z "$capture_file" || ! -f "$capture_file" ]]; then
         log ERROR "Unable to allocate capture buffer for interactive picker output."
         return 2

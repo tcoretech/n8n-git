@@ -25,11 +25,11 @@ reconcile_imported_workflow_ids() {
 
     # Create indexes of workflows for fast lookup
     local pre_workflows_by_id
-    pre_workflows_by_id=$(mktemp -t n8n-pre-ids-XXXXXX.json)
+    pre_workflows_by_id=$(mktemp /tmp/n8n-pre-ids-XXXXXX)
     local post_workflows_by_id
-    post_workflows_by_id=$(mktemp -t n8n-post-ids-XXXXXX.json)
+    post_workflows_by_id=$(mktemp /tmp/n8n-post-ids-XXXXXX)
     local new_workflows_by_name
-    new_workflows_by_name=$(mktemp -t n8n-new-names-XXXXXX.json)
+    new_workflows_by_name=$(mktemp /tmp/n8n-new-names-XXXXXX)
     
     # Build pre-import ID index
     if [[ -n "$pre_import_snapshot" && -f "$pre_import_snapshot" ]]; then
@@ -54,7 +54,7 @@ reconcile_imported_workflow_ids() {
     
     # Process manifest line by line and update in place
     local reconciled_tmp
-    reconciled_tmp=$(mktemp -t n8n-reconciled-XXXXXX.ndjson)
+    reconciled_tmp=$(mktemp /tmp/n8n-reconciled-XXXXXX)
     local created=0 updated=0 unresolved=0
     local line_count=0
     

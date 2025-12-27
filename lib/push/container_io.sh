@@ -21,14 +21,14 @@ push_collect_workflow_exports() {
         return 1
     }
 
-    if ! dockExec "$container_id" "rm -rf /tmp/workflow_exports && mkdir -p /tmp/workflow_exports" false; then
+    if ! n8n_exec "$container_id" "rm -rf /tmp/workflow_exports && mkdir -p /tmp/workflow_exports" false; then
         log ERROR "Failed to prepare workflow export directory inside container"
         cleanup_temp_path "$_pce_temp_dir"
         return 1
     fi
 
     local export_cmd="n8n export:workflow --all --separate --output=/tmp/workflow_exports/"
-    if ! dockExec "$container_id" "$export_cmd" false; then
+    if ! n8n_exec "$container_id" "$export_cmd" false; then
         log ERROR "Failed to export individual workflow files from container"
         cleanup_temp_path "$_pce_temp_dir"
         return 1
@@ -38,21 +38,14 @@ push_collect_workflow_exports() {
     local docker_cp_local_export_dir
     docker_cp_local_export_dir=$(convert_path_for_docker_cp "$_pce_temp_dir/")
     [[ -z "$docker_cp_local_export_dir" ]] && docker_cp_local_export_dir="$_pce_temp_dir/"
-    if ! cp_workflow_output=$(docker cp "${container_id}:/tmp/workflow_exports/" "$docker_cp_local_export_dir" 2>&1); then
-        log ERROR "Failed to copy exported workflow files from container"
-        if [[ -n "$cp_workflow_output" ]]; then
-            log DEBUG "docker cp error: $cp_workflow_output"
-        fi
+    if ! copy_from_n8n "/tmp/workflow_exports/" "$docker_cp_local_export_dir" "$container_id"; then
+        log ERROR "Failed to copy exported workflow files from n8n instance"
         cleanup_temp_path "$_pce_temp_dir"
         return 1
     fi
 
-    if [[ -n "$cp_workflow_output" && "$verbose" == "true" ]]; then
-        log DEBUG "docker cp output: $cp_workflow_output"
-    fi
-
     if [[ ! -d "$_pce_temp_dir/workflow_exports" ]]; then
-        log ERROR "Expected workflow export directory missing after container copy"
+        log ERROR "Expected workflow export directory missing after copy from n8n"
         cleanup_temp_path "$_pce_temp_dir"
         return 1
     fi

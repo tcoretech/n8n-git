@@ -125,7 +125,7 @@ get_workflow_folder_mapping() {
         fi
 
         local projects_capture=""
-        projects_capture=$(mktemp -t n8n-projects-response-XXXXXXXX.json)
+        projects_capture=$(mktemp /tmp/n8n-projects-response-XXXXXXXX)
         if ! $attempted_session && [[ -n "${n8n_api_key:-}" ]]; then
             N8N_API_EXPECTED_STATUS="401"
         fi
@@ -147,7 +147,7 @@ get_workflow_folder_mapping() {
         rm -f "$projects_capture"
 
         local workflows_capture=""
-        workflows_capture=$(mktemp -t n8n-workflows-response-XXXXXXXX.json)
+        workflows_capture=$(mktemp /tmp/n8n-workflows-response-XXXXXXXX)
         if ! $attempted_session && [[ -n "${n8n_api_key:-}" ]]; then
             N8N_API_EXPECTED_STATUS="401"
         fi
@@ -220,8 +220,8 @@ get_workflow_folder_mapping() {
     fi
 
     local projects_tmp workflows_tmp
-    projects_tmp=$(mktemp -t n8n-projects-XXXXXXXX.json)
-    workflows_tmp=$(mktemp -t n8n-workflows-XXXXXXXX.json)
+    projects_tmp=$(mktemp /tmp/n8n-projects-XXXXXXXX)
+    workflows_tmp=$(mktemp /tmp/n8n-workflows-XXXXXXXX)
     printf '%s' "$projects_response" > "$projects_tmp"
     printf '%s' "$workflows_response" > "$workflows_tmp"
 
@@ -448,7 +448,7 @@ get_workflow_folder_mapping() {
     fi
 
     local workflow_entries_file
-    workflow_entries_file=$(mktemp -t n8n-workflow-entries-XXXXXXXX.json)
+    workflow_entries_file=$(mktemp /tmp/n8n-workflow-entries-XXXXXXXX)
     
     if [[ -n "$workflow_rows" ]]; then
         while IFS= read -r workflow_row; do
@@ -538,7 +538,7 @@ get_workflow_folder_mapping() {
     fi
 
     local workflows_json_file
-    workflows_json_file=$(mktemp -t n8n-workflows-final-XXXXXXXX.json)
+    workflows_json_file=$(mktemp /tmp/n8n-workflows-final-XXXXXXXX)
     if [[ -s "$workflow_entries_file" ]]; then
         jq -s '.' "$workflow_entries_file" > "$workflows_json_file"
     else
@@ -547,7 +547,7 @@ get_workflow_folder_mapping() {
     rm -f "$workflow_entries_file"
 
     local folders_json_file
-    folders_json_file=$(mktemp -t n8n-folders-final-XXXXXXXX.json)
+    folders_json_file=$(mktemp /tmp/n8n-folders-final-XXXXXXXX)
     if ((${#folder_entries[@]} > 0)); then
         printf '%s\n' "${folder_entries[@]}" | jq -s '.' > "$folders_json_file"
     else
@@ -555,7 +555,7 @@ get_workflow_folder_mapping() {
     fi
 
     local projects_json_file
-    projects_json_file=$(mktemp -t n8n-projects-final-XXXXXXXX.json)
+    projects_json_file=$(mktemp /tmp/n8n-projects-final-XXXXXXXX)
     if ((${#project_entries[@]} > 0)); then
         printf '%s\n' "${project_entries[@]}" | jq -s '.' > "$projects_json_file"
     else
