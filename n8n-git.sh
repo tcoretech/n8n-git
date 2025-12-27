@@ -67,7 +67,7 @@ SELECTED_RESTORE_TYPE="all"
 
 # Project Information
 PROJECT_NAME="n8n Git - Organise and Version Workflows"
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 # Core operation settings
 command=""
