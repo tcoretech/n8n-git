@@ -154,6 +154,7 @@ fail_legacy_action() {
 }
 source "$LIB_DIR/pull/import.sh"
 source "$LIB_DIR/reset/reset.sh"
+source "$LIB_DIR/utils/version.sh"
 
 # Allow the CLI to reuse a single authenticated n8n session for the entire process
 if [[ -z "${N8N_SESSION_REUSE_ENABLED:-}" ]]; then
@@ -162,7 +163,7 @@ fi
 
 # --- Main Function ---
 main() {
-    # Support git-like verbs (push/pull/reset/configure) as first arg
+    # Support git-like verbs (push/pull/reset/configure/update/version) as first arg
     if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
         case "${1,,}" in
             push) command="push"; shift ;;
@@ -170,6 +171,8 @@ main() {
             reset) command="reset"; shift ;;
             config|configure) command="config"; shift ;;
             reconfigure) command="config-reprompt"; shift ;;
+            update) command="update"; shift ;;
+            version) command="version"; shift ;;
         esac
     fi
 
@@ -316,10 +319,37 @@ main() {
                 esac
                 shift 2 ;;
             -h|--help) show_help; exit 0 ;;
+            --version|-V) show_version_info; exit 0 ;;
             *) log ERROR "Invalid option: $1"; show_help; exit 1 ;;
         esac
     done
+
+    # Handle version command immediately (no dependencies needed)
+    if [[ "$command" == "version" ]]; then
+        show_version_info
+        exit 0
+    fi
+
+    # Handle update command immediately (minimal dependencies)
+    if [[ "$command" == "update" ]]; then
+        log HEADER "n8n Git v$VERSION"
+        local update_dry_run=false
+        local target_version=""
+        # Check for --dry-run flag in remaining args
+        for arg in "$@"; do
+            case "$arg" in
+                --dry-run) update_dry_run=true ;;
+                v*|[0-9]*) target_version="$arg" ;;
+            esac
+        done
+        perform_update "$update_dry_run" "$target_version"
+        exit $?
+    fi
+
     log HEADER "n8n Git v$VERSION"
+
+    # Show update notification (non-blocking, cached check)
+    show_update_notification
        
     if [[ "$command" != "config" ]]; then
         if ! check_host_dependencies; then

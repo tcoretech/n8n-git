@@ -186,6 +186,8 @@ Commands:
   pull      Import workflows, credentials, and environment variables into n8n.
   reset     Replay Git history to restore, archive, or delete workflows by commit/tag/time.
   config    Launch the interactive configuration wizard.
+  update    Check for and install the latest version of n8n-git.
+  version   Display version information and check for updates.
 
 GitHub Options:
   --repo <user/repo>      Git repository (e.g., 'myuser/n8n-backups').
@@ -232,6 +234,7 @@ General Options:
   --log-file <path>       Append logs to file.
   --config <path>         Custom config file path.
   -h, --help              Show this help message.
+  -V, --version           Show version information.
 
 Configuration Precedence:
   1. CLI arguments (highest priority)
@@ -249,6 +252,12 @@ Examples:
 
   # Interactive time travel through Git history
   n8n-git reset --interactive --mode soft
+
+  # Check for updates and install latest version
+  n8n-git update
+
+  # Show version info
+  n8n-git version
 
 For more help, see: https://github.com/tcoretech/n8n-git
 EOF
