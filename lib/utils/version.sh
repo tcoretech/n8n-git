@@ -9,6 +9,15 @@
 N8N_GIT_REPO="${N8N_GIT_REPO:-tcoretech/n8n-git}"
 N8N_GIT_UPDATE_CHECK_INTERVAL="${N8N_GIT_UPDATE_CHECK_INTERVAL:-86400}"  # 24 hours in seconds
 
+# Global variables for update state (initialized to prevent unset variable issues)
+UPDATE_AVAILABLE="${UPDATE_AVAILABLE:-false}"
+LATEST_VERSION="${LATEST_VERSION:-}"
+
+# Installation detection globals
+INSTALL_TYPE="${INSTALL_TYPE:-}"
+INSTALL_BINDIR="${INSTALL_BINDIR:-}"
+INSTALL_SHAREDIR="${INSTALL_SHAREDIR:-}"
+
 # Cache file for version check (avoid spamming GitHub API)
 _get_version_cache_file() {
     local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/n8n-git"
@@ -46,6 +55,20 @@ get_latest_release_version() {
 
     if [[ -n "$version" ]]; then
         echo "$version"
+        return 0
+    fi
+    return 1
+}
+
+# Validate a version string matches semantic versioning pattern
+# Returns: 0 if valid, 1 if invalid
+# Valid formats: 1.2.3, v1.2.3, 1.2, v1.2
+is_valid_version() {
+    local version="$1"
+    # Strip leading 'v' if present
+    version="${version#v}"
+    # Check for valid semver pattern (major.minor or major.minor.patch)
+    if [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
         return 0
     fi
     return 1
@@ -173,7 +196,9 @@ show_update_notification() {
         fi
     else
         # Trigger background check for next time (don't block)
-        (check_for_updates &) 2>/dev/null || true
+        # Use disown to properly detach the background process
+        (check_for_updates &
+        disown) 2>/dev/null || true
     fi
 }
 
@@ -275,6 +300,12 @@ perform_update() {
     # Determine the version to install
     local source_ref="main"
     if [[ -n "$target_version" ]]; then
+        # Validate version string before using it in URL construction
+        if ! is_valid_version "$target_version"; then
+            log ERROR "Invalid version format: $target_version"
+            log INFO "Version must be in semantic version format (e.g., 1.2.3 or v1.2.3)"
+            return 1
+        fi
         source_ref="v${target_version#v}"
         log INFO "Installing specific version: $source_ref"
     else

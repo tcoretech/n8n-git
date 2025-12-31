@@ -176,6 +176,50 @@ main() {
         esac
     fi
 
+    # Handle version command immediately (no argument parsing needed)
+    if [[ "$command" == "version" ]]; then
+        show_version_info
+        exit 0
+    fi
+
+    # Handle update command immediately with its own argument parsing
+    if [[ "$command" == "update" ]]; then
+        log HEADER "n8n Git v$VERSION"
+        local update_dry_run=false
+        local target_version=""
+        # Parse update-specific arguments
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --dry-run) update_dry_run=true; shift ;;
+                # Match semantic version patterns: v1.2.3, 1.2.3, v1.2, 1.2
+                v[0-9]*.[0-9]*|[0-9]*.[0-9]*)
+                    target_version="$1"; shift ;;
+                -h|--help)
+                    echo "Usage: n8n-git update [--dry-run] [VERSION]"
+                    echo ""
+                    echo "Update n8n-git to the latest version or a specific version."
+                    echo ""
+                    echo "Options:"
+                    echo "  --dry-run    Show what would be done without making changes"
+                    echo "  VERSION      Specific version to install (e.g., 1.2.3 or v1.2.3)"
+                    echo ""
+                    echo "Examples:"
+                    echo "  n8n-git update              # Update to latest version"
+                    echo "  n8n-git update --dry-run    # Preview update"
+                    echo "  n8n-git update 1.2.0        # Install specific version"
+                    exit 0
+                    ;;
+                *)
+                    log ERROR "Unknown option for update: $1"
+                    log INFO "Use 'n8n-git update --help' for usage information"
+                    exit 1
+                    ;;
+            esac
+        done
+        perform_update "$update_dry_run" "$target_version"
+        exit $?
+    fi
+
     # Parse command-line arguments (legacy flags still supported)
     while [ $# -gt 0 ]; do
         case $1 in
@@ -323,28 +367,6 @@ main() {
             *) log ERROR "Invalid option: $1"; show_help; exit 1 ;;
         esac
     done
-
-    # Handle version command immediately (no dependencies needed)
-    if [[ "$command" == "version" ]]; then
-        show_version_info
-        exit 0
-    fi
-
-    # Handle update command immediately (minimal dependencies)
-    if [[ "$command" == "update" ]]; then
-        log HEADER "n8n Git v$VERSION"
-        local update_dry_run=false
-        local target_version=""
-        # Check for --dry-run flag in remaining args
-        for arg in "$@"; do
-            case "$arg" in
-                --dry-run) update_dry_run=true ;;
-                v*|[0-9]*) target_version="$arg" ;;
-            esac
-        done
-        perform_update "$update_dry_run" "$target_version"
-        exit $?
-    fi
 
     log HEADER "n8n Git v$VERSION"
 
