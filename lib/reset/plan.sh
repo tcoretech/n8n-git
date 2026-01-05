@@ -1287,7 +1287,6 @@ prompt_for_confirmation() {
             return 0
             ;;
         *)
-            log WARN "Reset aborted by user"
             return 130
             ;;
     esac

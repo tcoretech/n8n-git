@@ -164,12 +164,15 @@ validate_target_safety() {
     fi
     
     # Check if there are uncommitted changes
-    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-        log WARN "Working directory has uncommitted changes"
-        log WARN "These changes may be lost during reset"
-        
-        if declare -f add_plan_warning >/dev/null 2>&1; then
-            add_plan_warning "Uncommitted changes in working directory"
+    # Skip check if we are using a temporary clone (RESET_REPO_CLEANUP_DIR is set)
+    if [[ -z "${RESET_REPO_CLEANUP_DIR:-}" ]]; then
+        if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+            log WARN "Working directory has uncommitted changes"
+            log WARN "These changes may be lost during reset"
+            
+            if declare -f add_plan_warning >/dev/null 2>&1; then
+                add_plan_warning "Uncommitted changes in working directory"
+            fi
         fi
     fi
     

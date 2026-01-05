@@ -149,8 +149,13 @@ display_confirmation() {
     fi
     
     # Prompt for confirmation
-    if ! prompt_for_confirmation; then
-        log WARN "Reset aborted by user"
+    prompt_for_confirmation
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
+        if [[ $exit_code -eq 130 ]]; then
+            return 130
+        fi
+        log WARN "Confirmation failed"
         return 130
     fi
     
@@ -225,15 +230,15 @@ main_reset() {
     fi
     
     # Step 4: Display plan and get confirmation
-    if ! display_confirmation; then
-        exit_code=$?
+    display_confirmation
+    exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
         if [[ $exit_code -eq 2 ]]; then
             # Dry-run mode: exit cleanly
             log INFO "Dry-run complete"
             return 0
         elif [[ $exit_code -eq 130 ]]; then
             # User abort
-            log WARN "Reset aborted by user"
             return 130
         else
             log ERROR "Confirmation failed"
