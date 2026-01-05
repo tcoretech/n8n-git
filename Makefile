@@ -11,12 +11,13 @@ LIB_DEST := $(SHAREDIR)/lib
 DIST_DIR ?= dist
 DIST_STAGE := $(DIST_DIR)/$(INSTALL_NAME)
 
-.PHONY: help install lint syntax shellcheck regression push-test pull-test reset-test test package clean-package clean distclean
+.PHONY: help install update lint syntax shellcheck regression push-test pull-test reset-test test package clean-package clean distclean
 
 help:
 	@echo "Available targets:"
 	@echo "  make install           # Install $(SCRIPT) into $(BINDIR) (override with PREFIX=…)"
 	@echo "                         # Libraries copied to $(LIB_DEST) (override with SHAREDIR=…)"
+	@echo "  make update            # Update n8n-git to the latest release from GitHub"
 	@echo "  make lint              # Run shell syntax validation and ShellCheck"
 	@echo "  make test              # Run the full regression suite (push and pull flows)"
 	@echo "  make package           # Stage scripts and docs under $(DIST_STAGE) for release packaging"
@@ -47,6 +48,17 @@ install: $(SCRIPT)
 		fi; \
 	else \
 		echo "Failed to create $(SHAREDIR). Try 'sudo make install' or adjust SHAREDIR."; \
+		exit 1; \
+	fi
+
+update:
+	@echo "Checking for n8n-git updates..."
+	@if [ -x "$(BINDIR)/$(INSTALL_NAME)" ]; then \
+		"$(BINDIR)/$(INSTALL_NAME)" update; \
+	elif [ -x "./$(SCRIPT)" ]; then \
+		./$(SCRIPT) update; \
+	else \
+		echo "n8n-git not found. Run 'make install' first."; \
 		exit 1; \
 	fi
 
