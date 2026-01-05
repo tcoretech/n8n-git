@@ -5,6 +5,16 @@ All notable changes to n8n Git will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-01-05
+
+### Fixed
+-  skip uncommitted changes check when using temporary clone in reset scripts
+-  address folder path resolution and clearer error messaging in reset scripts
+-  improve exit code handling and add temp file cleanup
+
+### Maintenance
+- release): bump version to 1.2.1
+
 ## [1.2.0] - 2026-01-05
 
 ### Added
