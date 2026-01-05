@@ -56,8 +56,9 @@ resolve_target_commit() {
     # Determine resolution mode
     if [[ -n "$reset_target" ]]; then
         # Explicit mode: --to <sha|tag>
-        if ! parse_explicit_target "$reset_target"; then
-            local exit_code=$?
+        parse_explicit_target "$reset_target"
+        local exit_code=$?
+        if [[ $exit_code -ne 0 ]]; then
             log ERROR "Failed to resolve explicit target: $reset_target"
             [[ $exit_code -eq 130 ]] && return 130
             return 2
@@ -67,10 +68,13 @@ resolve_target_commit() {
     elif [[ "$reset_interactive" == "true" ]]; then
         # Interactive mode: --interactive
         log INFO "Launching interactive commit picker..."
-        if ! launch_interactive_picker; then
-            local exit_code=$?
+        launch_interactive_picker
+        local exit_code=$?
+        if [[ $exit_code -ne 0 ]]; then
+            if [[ $exit_code -eq 130 ]]; then
+                return 130
+            fi
             log ERROR "Interactive picker failed or was cancelled"
-            [[ $exit_code -eq 130 ]] && return 130
             return 2
         fi
         log INFO "Target resolved (interactive): $RESOLVED_TARGET_DISPLAY ($RESOLVED_TARGET_SHA)"
@@ -202,7 +206,12 @@ main_reset() {
     fi
     
     # Step 2: Resolve target commit
-    if ! resolve_target_commit; then
+    resolve_target_commit
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
+        if [[ $exit_code -eq 130 ]]; then
+            return 130
+        fi
         log ERROR "Failed to resolve target commit"
         return 2
     fi
