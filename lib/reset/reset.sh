@@ -90,7 +90,9 @@ resolve_target_commit() {
         
     else
         # No target specified - error
-        log ERROR "No target specified. Use --to, --interactive, or --since/--until"
+        log ERROR "No target specified."
+        log INFO "Tip: Rerun with --interactive to browse and select a commit"
+        log INFO "     Or use --to <commit> to specify a target directly"
         return 2
     fi
     
