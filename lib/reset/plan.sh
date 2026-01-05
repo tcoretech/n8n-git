@@ -954,15 +954,9 @@ render_plan_diff_tree() {
         # Sanitize project name to match file system representation
         project_label="$(sanitize_filename_component "$project_label")"
 
+        # Use RESET_PLAN_WORKFLOW_FOLDER_PATH as authoritative source for folder
+        # Don't try to infer folder from match_key as workflow names may contain "/"
         local folder_path="${RESET_PLAN_WORKFLOW_FOLDER_PATH[$identifier]:-}"
-        if [[ -z "$folder_path" ]]; then
-            local match_key_hint="${RESET_PLAN_WORKFLOW_MATCH_KEY[$identifier]:-}"
-            if [[ -n "$match_key_hint" && "$match_key_hint" == */* ]]; then
-                folder_path="${match_key_hint%/*}"
-            else
-                folder_path="$(reset_plan_extract_folder_from_display "$display_path" "$project_label" "$workflow_name")"
-            fi
-        fi
         folder_path="$(reset_plan_sanitize_token "$folder_path")"
 
         local composite="$project_label|$folder_path"
@@ -1239,7 +1233,8 @@ reset_plan_resolved_scope_label() {
 display_plan_warnings() {
     local warning_count=${#RESET_PLAN_WARNINGS[@]}
     ((warning_count == 0)) && return 0
-    log WARN "${BOLD}⚠ Warnings:${NC}"
+    echo ""
+    log WARN "${BOLD}Warnings:${NC}"
     local warning
     for warning in "${RESET_PLAN_WARNINGS[@]}"; do
         log WARN "  • $warning"
@@ -1292,7 +1287,6 @@ prompt_for_confirmation() {
             return 0
             ;;
         *)
-            log WARN "Reset aborted by user"
             return 130
             ;;
     esac

@@ -248,9 +248,6 @@ ensure_n8n_session_credentials() {
             return 1
         fi
         mv "$host_tmp_dir/$copied_name" "$host_lookup_file"
-        if [[ -n "$cp_output" && "$verbose" == "true" ]]; then
-            log DEBUG "copy output: ${cp_output//$'\n'/ }"
-        fi
     fi
 
     if [[ "$remove_lookup_file" == "true" ]]; then
@@ -337,9 +334,6 @@ ensure_n8n_session_credentials() {
             return 1
         fi
         mv "$host_tmp_dir/$targeted_name" "$host_target_file"
-        if [[ -n "$target_copy_output" && "$verbose" == "true" ]]; then
-            log DEBUG "docker cp output (targeted): ${target_copy_output//$'\n'/ }"
-        fi
     fi
 
     n8n_exec "$container_id" "rm -f '$targeted_container_path'" false >/dev/null 2>&1 || true

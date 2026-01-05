@@ -1436,18 +1436,56 @@ ensure_portable_tmp_base() {
     printf '%s\n' "$PORTABLE_TMP_BASE"
 }
 
+# Temp file tracking
+: "${N8N_GIT_TEMP_TRACKER_FILE:=}"
+export N8N_GIT_TEMP_TRACKER_FILE
+
+init_temp_tracker() {
+    if [[ -z "$N8N_GIT_TEMP_TRACKER_FILE" ]]; then
+        N8N_GIT_TEMP_TRACKER_FILE=$(mktemp -t n8n-git-temp-tracker-XXXXXX)
+        export N8N_GIT_TEMP_TRACKER_FILE
+    fi
+}
+
+register_temp_path() {
+    local path="$1"
+    if [[ -n "$path" ]]; then
+        if [[ -z "$N8N_GIT_TEMP_TRACKER_FILE" ]]; then
+             init_temp_tracker
+        fi
+        if [[ -f "$N8N_GIT_TEMP_TRACKER_FILE" ]]; then
+            echo "$path" >> "$N8N_GIT_TEMP_TRACKER_FILE"
+        fi
+    fi
+}
+
+cleanup_all_temp_paths() {
+    if [[ -n "$N8N_GIT_TEMP_TRACKER_FILE" && -f "$N8N_GIT_TEMP_TRACKER_FILE" ]]; then
+        while read -r path; do
+            cleanup_temp_path "$path"
+        done < "$N8N_GIT_TEMP_TRACKER_FILE"
+        rm -f "$N8N_GIT_TEMP_TRACKER_FILE"
+    fi
+}
+
 portable_mktemp_dir() {
     local prefix="${1:-n8n-portable}"
     local base
     base=$(ensure_portable_tmp_base)
-    mktemp -d "$base/${prefix}.XXXXXX"
+    local path
+    path=$(mktemp -d "$base/${prefix}.XXXXXX")
+    register_temp_path "$path"
+    printf '%s\n' "$path"
 }
 
 portable_mktemp_file() {
     local prefix="${1:-n8n-portable}"
     local base
     base=$(ensure_portable_tmp_base)
-    mktemp "$base/${prefix}.XXXXXX"
+    local path
+    path=$(mktemp "$base/${prefix}.XXXXXX")
+    register_temp_path "$path"
+    printf '%s\n' "$path"
 }
 
 convert_path_for_docker_cp() {
@@ -2241,7 +2279,7 @@ copy_from_n8n() {
     
     if [[ -n "$container_id" ]]; then
         log DEBUG "Copying from container $container_id:$source_path to $dest_path"
-        docker cp "${container_id}:${source_path}" "$dest_path"
+        docker cp "${container_id}:${source_path}" "$dest_path" >/dev/null
     else
         log DEBUG "Copying locally from $source_path to $dest_path"
         cp -r "$source_path" "$dest_path"
@@ -2255,7 +2293,7 @@ copy_to_n8n() {
     
     if [[ -n "$container_id" ]]; then
         log DEBUG "Copying from $source_path to container $container_id:$dest_path"
-        docker cp "$source_path" "${container_id}:${dest_path}"
+        docker cp "$source_path" "${container_id}:${dest_path}" >/dev/null
     else
         log DEBUG "Copying locally from $source_path to $dest_path"
         cp -r "$source_path" "$dest_path"

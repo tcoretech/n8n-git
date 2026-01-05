@@ -141,6 +141,7 @@ reset_until=""                # time window end for --until
 
 # Load all modules
 source "$LIB_DIR/utils/common.sh"
+init_temp_tracker
 source "$LIB_DIR/utils/interactive.sh"
 # shellcheck disable=SC1091
 source "$LIB_DIR/n8n/snapshot.sh"
@@ -1019,7 +1020,7 @@ main() {
             else
                 reset_exit_code=$?
                 case $reset_exit_code in
-                    130) log INFO "Reset aborted by user." ;;
+                    130) log INFO "Reset aborted." ;;
                     2) log ERROR "Reset failed due to validation error." ;;
                     *) log ERROR "Reset operation failed." ;;
                 esac
@@ -1036,6 +1037,6 @@ main() {
 }
 
 # --- Script Execution ---
-trap 'log ERROR "An unexpected error occurred (Line: $LINENO). Aborting."; exit 1' ERR
-trap 'if declare -F cleanup_reset_repository >/dev/null 2>&1; then cleanup_reset_repository; fi; cleanup_n8n_session force 2>/dev/null || true; exit' EXIT TERM INT
+trap 'log ERROR "An unexpected error occurred in ${BASH_SOURCE[0]} (Line: $LINENO). Aborting."; exit 1' ERR
+trap 'if declare -F cleanup_reset_repository >/dev/null 2>&1; then cleanup_reset_repository; fi; cleanup_n8n_session force 2>/dev/null || true; cleanup_all_temp_paths; exit' EXIT TERM INT
 main "$@"
