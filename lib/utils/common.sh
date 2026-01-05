@@ -2268,7 +2268,8 @@ n8n_check_path() {
     if [[ -n "$container_id" ]]; then
         docker exec "$container_id" sh -c "[ -$type '$path' ]"
     else
-        [ -$type "$path" ]
+        # Dynamic test operator
+        test "-$type" "$path"
     fi
 }
 

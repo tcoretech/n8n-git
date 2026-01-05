@@ -1006,7 +1006,7 @@ pull_import() {
                         if [[ -n "$container_id" ]]; then
                             wf_name=$(docker exec "$container_id" cat "$workflow_file" | jq -r '.name // "Unknown"')
                         else
-                            wf_name=$(cat "$workflow_file" | jq -r '.name // "Unknown"')
+                            wf_name=$(jq -r '.name // "Unknown"' "$workflow_file")
                         fi
                         log INFO "Importing workflow: $wf_name"
                         local escaped_file
