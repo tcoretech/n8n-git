@@ -298,6 +298,8 @@ stage_directory_workflows_to_container() {
         log ERROR "Invalid source directory: ${source_dir:-<empty>}"
         return 1
     fi
+    # Normalize source dir to remove trailing slash for consistent path subst
+    source_dir="${source_dir%/}"
     
     # Container ID can be empty for local execution
     

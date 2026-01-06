@@ -67,7 +67,7 @@ SELECTED_RESTORE_TYPE="all"
 
 # Project Information
 PROJECT_NAME="n8n Git - Organise and Version Workflows"
-VERSION="1.1.0"
+VERSION="1.2.1"
 
 # Core operation settings
 command=""
@@ -275,7 +275,9 @@ main() {
                 esac
                 ;;
             --local-path) 
-                local_backup_path="$2"; local_backup_path_source="cli"; shift 2 ;;
+                local_backup_path="$2"; local_backup_path_source="cli";
+                CLI_LOCAL_BACKUP_PATH="$2"
+                shift 2 ;;
             --github-path)
                 local raw_github_path="$2"
                 github_path="$(normalize_github_path_prefix "$raw_github_path")"
@@ -442,6 +444,69 @@ main() {
         effective_prefix="$(resolve_repo_base_prefix)"
     fi
     
+    # Check for CLI local path override for Pull
+    local local_pull_override=false
+    
+    # Restore CLI path if available (overcoming potential config overwrite)
+    if [[ -n "${CLI_LOCAL_BACKUP_PATH:-}" ]]; then
+        local_backup_path="$CLI_LOCAL_BACKUP_PATH"
+        local_backup_path_source="cli"
+    fi
+
+    if [[ "$command" == "pull" && -n "$local_backup_path" && "$local_backup_path_source" == "cli" ]]; then
+        local_pull_override=true
+        log INFO "Local path override detected. Using '$local_backup_path' as source."
+        
+        # Override GitHub path setting for this execution as we are using a local root
+        github_path=""
+        needs_github=false
+        
+        # Intelligent Defaults Configuration (Local Pull Mode)
+        local wf_source="${restore_workflows_mode_source:-$workflows_source}"
+        local cr_source="${restore_credentials_mode_source:-$credentials_source}"
+        
+        # 1. No specific components -> Enable Both (Mode 1: Local)
+        if [[ "$wf_source" != "cli" && "$cr_source" != "cli" ]]; then
+             restore_workflows_mode=1
+             restore_credentials_mode=1
+             restore_workflows_mode_source="cli-derived-local"
+             restore_credentials_mode_source="cli-derived-local"
+             restore_type="all"
+             log INFO "No specific components selected; pulling both workflows and credentials from local path."
+
+        # 2. Specific components -> Enable only requested (Mode 1: Local), disable others
+        elif [[ "$wf_source" == "cli" && "$cr_source" != "cli" ]]; then
+             if [[ "$workflows" == "0" || "$workflows" == "disabled" ]]; then restore_workflows_mode=0; else restore_workflows_mode=1; fi
+             restore_credentials_mode=0
+             restore_credentials_mode_source="cli-derived-local"
+             restore_type="workflows"
+
+        elif [[ "$wf_source" != "cli" && "$cr_source" == "cli" ]]; then
+             restore_workflows_mode=0
+             restore_workflows_mode_source="cli-derived-local"
+             if [[ "$credentials" == "0" || "$credentials" == "disabled" ]]; then restore_credentials_mode=0; else restore_credentials_mode=1; fi
+             restore_type="credentials"
+             
+        else
+             # Both explicit
+             if [[ "$workflows" != "0" ]]; then restore_workflows_mode=1; fi
+             if [[ "$credentials" != "0" ]]; then restore_credentials_mode=1; fi
+        fi
+
+        # Sync main storage variables for UI consistency
+        workflows="$restore_workflows_mode"
+        credentials="$restore_credentials_mode"
+        
+        # Ensure we don't accidentally fall into remote logic later
+        github_repo="" 
+        github_token=""
+    fi
+    
+    # Export local override state for interactive functions
+    if [[ "$local_pull_override" == "true" ]]; then
+        export local_pull_override
+    fi
+
     if [[ "$command" == "pull" ]]; then
         if [[ -z "$restore_workflows_mode" && -n "$workflows" ]]; then
             restore_workflows_mode="$workflows"
@@ -495,7 +560,11 @@ main() {
     needs_github=false
     if [[ "$command" == "pull" ]]; then
         if [[ "${restore_workflows_mode:-0}" == "2" ]] || [[ "${restore_credentials_mode:-0}" == "2" ]]; then
-            needs_github=true
+            if [[ "$local_pull_override" == "true" ]]; then
+                needs_github=false
+            else
+                needs_github=true
+            fi
         fi
     else
         if [[ "$workflows" == "2" ]] || [[ "$credentials" == "2" ]] || [[ "$environment" == "2" ]]; then
@@ -743,7 +812,11 @@ main() {
 
         # Recalculate derived GitHub requirement after interactive choices
         if [[ "$command" == "pull" ]]; then
-            needs_github=true
+            if [[ "$local_pull_override" == "true" ]]; then
+                needs_github=false
+            else
+                needs_github=true
+            fi
         else
             if [[ "$workflows" == "2" ]] || [[ "$credentials" == "2" ]]; then
                 needs_github=true
@@ -843,7 +916,11 @@ main() {
             fi
 
             if [[ "$restore_workflows_mode" == "2" || "$restore_credentials_mode" == "2" ]]; then
-                needs_github=true
+                if [[ "$local_pull_override" == "true" ]]; then
+                    needs_github=false
+                else
+                    needs_github=true
+                fi
             else
                 needs_github=false
             fi
@@ -1002,7 +1079,12 @@ main() {
             fi
             ;;
         pull)
-            if pull_import "$container" "$github_token" "$github_repo" "$github_branch" "${restore_workflows_mode:-2}" "${restore_credentials_mode:-1}" "${restore_folder_structure_preference:-auto}" "$dry_run_flag" "$credentials_folder_name" "$interactive_mode" "${restore_preserve_ids:-false}" "${restore_no_overwrite:-false}"; then
+            local pull_source_path=""
+            if [[ "$local_pull_override" == "true" ]]; then
+                pull_source_path="$local_backup_path"
+            fi
+
+            if pull_import "$container" "$github_token" "$github_repo" "$github_branch" "${restore_workflows_mode:-2}" "${restore_credentials_mode:-1}" "${restore_folder_structure_preference:-auto}" "$dry_run_flag" "$credentials_folder_name" "$interactive_mode" "${restore_preserve_ids:-false}" "${restore_no_overwrite:-false}" "$pull_source_path"; then
                 log SUCCESS "Pull operation completed successfully."
             else
                 log ERROR "Pull operation failed."
