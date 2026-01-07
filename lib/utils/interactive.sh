@@ -26,7 +26,11 @@ show_config_summary() {
             0) workflows_desc="Disabled" ;;
             1) workflows_desc="Local" ;;
             2) 
-                workflows_desc="GitHub"
+                if [[ "${local_pull_override:-false}" == "true" ]]; then
+                    workflows_desc="Local Source ${accent_color}(cli)${NC}"
+                else
+                    workflows_desc="GitHub"
+                fi
                 if [[ "${folder_structure_enabled:-false}" == "true" ]] || [[ "$folder_structure" == "true" ]]; then
                     folder_desc="Enabled"
                 else
@@ -41,7 +45,13 @@ show_config_summary() {
         case "$credentials" in
             0) credentials_desc="Disabled" ;;
             1) credentials_desc="Local" ;;
-            2) credentials_desc="GitHub" ;;
+            2) 
+                if [[ "${local_pull_override:-false}" == "true" ]]; then
+                    credentials_desc="Local Source ${accent_color}(cli)${NC}"
+                else
+                    credentials_desc="GitHub"
+                fi
+                ;;
         esac
     fi
 
@@ -71,19 +81,23 @@ show_config_summary() {
         log INFO "  Project: ${value_color}${project_effective}${NC}"
     fi
 
-    local effective_prefix
-    effective_prefix="$(effective_repo_prefix)"
-    if [[ -n "$effective_prefix" ]]; then
-        log INFO "  GitHub path: ${value_color}${effective_prefix}${NC}"
+    if [[ "${local_pull_override:-false}" == "true" ]]; then
+        log INFO "  Local Source Path: ${value_color}${local_backup_path}${NC} ${accent_color}(cli)${NC}"
     else
-        log INFO "  GitHub path: ${accent_color}<repository root>${NC}"
+        local effective_prefix
+        effective_prefix="$(effective_repo_prefix)"
+        if [[ -n "$effective_prefix" ]]; then
+            log INFO "  GitHub path: ${value_color}${effective_prefix}${NC}"
+        else
+            log INFO "  GitHub path: ${accent_color}<repository root>${NC}"
+        fi
     fi
 
     if [[ "${n8n_path_source:-default}" != "default" && "${n8n_path_source:-unset}" != "unset" ]]; then
         if [[ -n "$n8n_path" ]]; then
-            log INFO "  n8n path: ${value_color}${n8n_path}${NC} ${accent_color}(source: ${n8n_path_source})${NC}"
+            log INFO "  n8n path: ${value_color}${n8n_path}${NC} ${accent_color}(cli)${NC}"
         else
-            log INFO "  n8n path: ${accent_color}<project root>${NC} ${accent_color}(source: ${n8n_path_source})${NC}"
+            log INFO "  n8n path: ${accent_color}<project root>${NC} ${accent_color}(cli)${NC}"
         fi
     elif [[ -n "$github_path" && "${github_path_source:-default}" != "default" ]]; then
         : # explicit GitHub path already shown above
@@ -92,7 +106,7 @@ show_config_summary() {
         log INFO "  n8n path: ${value_color}${n8n_path}${NC}"
     fi
     
-    if [[ -n "$github_repo" ]]; then
+    if [[ "${local_pull_override:-false}" != "true" && -n "$github_repo" ]]; then
         log INFO "  GitHub: ${value_color}$github_repo${NC} ${accent_color}(branch: ${github_branch:-main})${NC}"
         if [[ -n "$github_token" ]]; then
             local pat_preview="${github_token:0:15}*****"

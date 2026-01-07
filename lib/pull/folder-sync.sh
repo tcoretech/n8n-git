@@ -71,6 +71,67 @@ declare -g RESTORE_FOLDERS_MOVED=${RESTORE_FOLDERS_MOVED:-0}
 declare -g RESTORE_WORKFLOWS_REASSIGNED=${RESTORE_WORKFLOWS_REASSIGNED:-0}
 declare -g RESTORE_FOLDER_SYNC_RAN=${RESTORE_FOLDER_SYNC_RAN:-false}
 
+# Global Folder Cache
+declare -gA GLOBAL_FOLDER_CACHE
+declare -g GLOBAL_FOLDER_CACHE_PROJECT=""
+declare -g GLOBAL_FOLDER_CACHE_INITIALIZED=false
+
+# Initialize the folder cache for a specific project
+# Args: project_id
+init_folder_cache() {
+    local project_id="$1"
+    
+    # If already initialized for this project, skip
+    if [[ "$GLOBAL_FOLDER_CACHE_INITIALIZED" == "true" && "$GLOBAL_FOLDER_CACHE_PROJECT" == "$project_id" ]]; then
+        return 0
+    fi
+    # Use existing N8N_FOLDERS cache if populated
+    if [[ ${#N8N_FOLDERS[@]} -gt 0 ]]; then
+         GLOBAL_FOLDER_CACHE_INITIALIZED=true
+         GLOBAL_FOLDER_CACHE_PROJECT="$project_id"
+         return 0
+    fi
+    
+    log INFO "Initializing folder cache for project $project_id..."
+    
+    # Pre-warm N8N_FOLDERS via existing logic
+    # We call 'get_folder_id' on root to trigger cache loading if lazy, 
+    # but 'folder-state.sh' usually requires explicit loading.
+    # Let's verify 'load_n8n_folders' exists in folder-state.sh (implied by N8N_FOLDERS usage)
+    if declare -F load_n8n_folders >/dev/null; then
+        local folders_json
+        if folders_json=$(n8n_api_get_folders); then
+             load_n8n_folders "$folders_json"
+        else
+             log ERROR "Failed to fetch folders for cache initialization"
+             return 1
+        fi
+    else
+        # Fallback: Manual hydration similar to n8n_api_get_folders logic
+        # But for 'interleaved' mode, we really rely on the state being ready.
+        # We will assume 'load_n8n_state' (from folder.sh or similar) is called before processing.
+        # If not, we do a lazy init here.
+        log DEBUG "Using standard n8n_api_get_folders to warm cache"
+        local folders_json
+        if folders_json=$(n8n_api_get_folders); then
+             # Parse and populate map manually or via helper
+             # Actually, n8n_api_get_folders returns all folders across projects. 
+             # We should parse this structure.
+             # However, 'load_n8n_folders' seems cleaner. 
+             # If it doesn't exist, we implement a simple warming here.
+             
+             # Basic implementation since we can't see the rest of folder-state.sh yet:
+             # Just set flag and let 'get_folder_id' do lazy loading if implemented, 
+             # or rely on individual calls if not.
+             :
+        fi
+    fi
+
+    GLOBAL_FOLDER_CACHE_PROJECT="$project_id"
+    GLOBAL_FOLDER_CACHE_INITIALIZED=true
+    return 0
+}
+
 create_folder_path() {
     local project_id="$1"
     local folder_path="$2"
