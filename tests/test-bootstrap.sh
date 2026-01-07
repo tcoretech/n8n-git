@@ -21,6 +21,8 @@ fi
 HOST_MOUNT_PATH="$TEST_TEMP_DIR/mount"
 HOST_BACKUP_PATH="$TEST_TEMP_DIR/backup"
 mkdir -p "$HOST_MOUNT_PATH" "$HOST_BACKUP_PATH"
+# Ensure the container user (uid 1000) can write to these directories
+chmod 777 "$HOST_MOUNT_PATH" "$HOST_BACKUP_PATH"
 
 # Fix for WSL: Docker Desktop for Windows expects Windows paths for volumes
 if grep -qEi "(Microsoft|WSL)" /proc/version &> /dev/null; then
@@ -194,7 +196,8 @@ fi
 if [ -f "$HOST_BACKUP_PATH/workflows.json" ]; then
     log SUCCESS "Backup file verified in temp directory"
     # Optional: Check content
-    if grep -q "Test Workflow" "$HOST_BACKUP_PATH/workflows.json"; then
+    # Use docker exec to avoid permission issues (file is 600 owned by container user)
+    if docker exec "$CONTAINER_NAME" grep -q "Test Workflow" /tmp/backup-repo/workflows.json; then
         log SUCCESS "Backup file contains expected workflow"
     else
         log ERROR "Backup file does not contain expected workflow"

@@ -98,6 +98,28 @@ jobs:
       run: |
         docker rm -f n8n-reset-regression 2>/dev/null || true
 
+  bootstrap-test:
+    name: Bootstrap Test (Embedded)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install test dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq
+
+    - name: Run make bootstrap-test
+      run: |
+        chmod +x tests/test-bootstrap.sh
+        make bootstrap-test
+
+    - name: Cleanup test container
+      if: always()
+      run: |
+        docker rm -f n8n-git-test-container 2>/dev/null || true
+
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest

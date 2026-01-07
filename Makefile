@@ -79,7 +79,10 @@ pull-test:
 reset-test:
 	@tests/test-reset.sh
 
-regression: syntax shellcheck push-test pull-test reset-test
+bootstrap-test:
+	@tests/test-bootstrap.sh
+
+regression: syntax shellcheck push-test pull-test reset-test bootstrap-test
 
 test: regression
 
