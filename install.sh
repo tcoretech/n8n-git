@@ -31,8 +31,16 @@ SHAREDIR="${SHAREDIR:-$PREFIX/share/n8n-git}"
 LIB_DEST="${LIB_DEST:-$SHAREDIR/lib}"
 SCRIPT_DEST="$BINDIR/$INSTALL_NAME"
 
-SOURCE_REF="${N8N_GIT_SOURCE_REF:-main}"
-ARCHIVE_URL="${N8N_GIT_SOURCE_URL:-https://github.com/tcoretech/n8n-git/archive/refs/heads/${SOURCE_REF}.tar.gz}"
+# Allow external version override
+if [ -n "${VERSION:-}" ]; then
+    SOURCE_REF="${VERSION}"
+else
+    SOURCE_REF="${N8N_GIT_SOURCE_REF:-main}"
+fi
+
+# Use the generic /archive/ endpoint which supports both tags (v1.0.0) and branches (main)
+# This replaces the specific 'refs/heads/' path which only worked for branches
+ARCHIVE_URL="${N8N_GIT_SOURCE_URL:-https://github.com/tcoretech/n8n-git/archive/${SOURCE_REF}.tar.gz}"
 
 log INFO "n8n-git installer"
 log INFO "Installing binary to $SCRIPT_DEST"
