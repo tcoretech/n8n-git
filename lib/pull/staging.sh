@@ -710,7 +710,7 @@ stage_directory_workflows_to_container() {
                   .versionId = $versionId
                   | .version = (if (.version | type) == "object" then (.version + {id: $versionId}) else {id: $versionId} end)
                else . end)
-            | .active = (if (.active | type) == "boolean" then .active else false end)
+            | .active = false
                         | .isArchived = (if (.isArchived | type) == "boolean" then .isArchived else false end)
                         | del(.archived)
                         | (if $finalId == "" then

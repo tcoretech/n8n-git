@@ -539,7 +539,7 @@ pull_import() {
                 fi
             fi
         else
-            log WARN "Credentials artifact unavailable; skipping credential pull."
+            log WARN "Credentials unavailable; skipping credential pull."
             credentials_mode="0"
         fi
     fi
@@ -1156,6 +1156,42 @@ pull_import() {
                     else
                         log SUCCESS "Imported $imported_count workflow file(s)"
                     fi
+
+                    # Sync directory existence (handles empty folders)
+                    if [[ "$apply_folder_structure" == "true" ]]; then
+                        log INFO "Verifying folder structure..."
+                        local -a container_dirs=()
+                        local find_dir_cmd="find '$container_import_workflows' -mindepth 1 -type d -print 2>/dev/null | sort"
+                        
+                        if [[ -n "$container_id" ]]; then
+                            mapfile -t container_dirs < <(docker exec "$container_id" sh -c "$find_dir_cmd")
+                        else
+                            mapfile -t container_dirs < <(eval "$find_dir_cmd")
+                        fi
+                        
+                        local synced_folders=0
+                        for dir_path in "${container_dirs[@]}"; do
+                             [[ -z "$dir_path" ]] && continue
+                             
+                             # Calculate relative path from staging root
+                             local relative_path="${dir_path#"${container_import_workflows}/"}"
+                             
+                             if [[ -n "$relative_path" && "$relative_path" != "$dir_path" ]]; then
+                                 # Apply n8n_path prefix
+                                 local target_path="$relative_path"
+                                 if [[ -n "$stage_target_folder" ]]; then
+                                     target_path="${stage_target_folder%/}/${relative_path}"
+                                 fi
+                                 
+                                 if create_folder_path "$project_id" "$target_path" "$is_dry_run"; then
+                                     synced_folders=$((synced_folders + 1))
+                                 fi
+                             fi
+                        done
+                         if (( synced_folders > 0 )); then
+                            log SUCCESS "Verified/Created $synced_folders folder(s)"
+                         fi
+                    fi
                 fi
             else
                 if ! n8n_exec "$container_id" "N8N_IMPORT_EXPORT_OVERWRITE=false n8n import:workflow --input=$container_import_workflows" "$is_dry_run"; then
@@ -1212,14 +1248,20 @@ pull_import() {
         fi
     fi
     
-    # Attempt folder structure restoration if ANY workflows were successfully imported,
-    # even if some failed. This prevents "partial success" from being a mess.
+    # Attempt folder structure restoration (bulk sync)
+    # UNLESS we are in "file" mode (interleaved), where we have already handled folder organization workflow-by-workflow.
+    # In file/interleaved mode, proceed_with_folders will only trigger if bulk operations are still needed (e.g. empty folders),
+    # but for now we disable it to prevent double-handling and error noise.
     local proceed_with_folders=false
-    if [[ "$import_status" != "failed" ]]; then
-         proceed_with_folders=true
-    elif (( imported_count > 0 )); then
-         proceed_with_folders=true
-         log INFO "Proceeding with folder organization for the $imported_count workflow(s) that were successfully imported."
+    
+    # Only proceed with bulk folder sync if we are NOT in directory/interleaved mode
+    if [[ "$workflow_import_mode" != "directory" ]]; then
+        if [[ "$import_status" != "failed" ]]; then
+             proceed_with_folders=true
+        elif (( imported_count > 0 )); then
+             proceed_with_folders=true
+             log INFO "Proceeding with folder organization for the $imported_count workflow(s) that were successfully imported."
+        fi
     fi
 
     if [[ "$workflows_mode" != "0" ]] && $folder_structure_backup && [[ "$proceed_with_folders" == "true" ]] && [[ "$apply_folder_structure" == "true" ]]; then
