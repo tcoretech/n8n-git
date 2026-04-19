@@ -30,7 +30,7 @@
 
 ## ♾️ Overview
 
-Keep workflows, credentials, and folders in sync with GitHub or a local file system for quick import, backup, versioning, and fast organisation. The CLI wraps n8n's REST API to enable folder management so you can maintain consistent organisation between environments.
+Keep workflows, credentials, and folders in sync with GitHub, GitLab, or a local file system for quick import, backup, versioning, and fast organisation. The CLI wraps n8n's REST API to enable folder management so you can maintain consistent organisation between environments.
 
 | Command | Action |
 | --- | --- |
@@ -59,7 +59,7 @@ n8n-git supports multiple execution environments:
 **Common Requirements:**
 
 - Host system with `bash` 4+, `git`, `curl`, and `jq`
-- GitHub account (for remote Git storage) or local filesystem access
+- Git repository access (GitHub/GitLab) or local filesystem access
 
 > **Note**: n8n-git is designed for self-hosted n8n instances running in Docker containers. It does not currently support n8n Cloud.
 
@@ -131,7 +131,7 @@ Create a **Basic Auth credential** in n8n:
 
 ### 3. Try Common Operations
 
-**Backup workflows to GitHub** (with folder structure):
+**Backup workflows to Git** (with folder structure):
 
 ```bash
 n8n-git push --repo <username>/n8n-backup --github-path backup-folder/
@@ -203,10 +203,11 @@ n8n-git push
 
 | Config Variable | CLI Flag | Description | Values |
 | --------------- | ----------- | ------------- | --------- |
-| **Github options** | | | |
-| `GITHUB_REPO` | `--repo <user/repo>` | Git repository | `myuser/n8n-backups` |
-| `GITHUB_TOKEN` | `--token <pat>` | GitHub Personal Access Token | `ghp_...` |
-| `GITHUB_BRANCH` | `--branch <name>` | Git branch | `main` (default) |
+| **Git options** | | | |
+| `GIT_HOST` | `--git-host <domain>` | Git host (e.g. gitlab.com) | `github.com` (default) |
+| `GIT_REPO` | `--repo <user/repo>` | Git repository | `myuser/n8n-backups` |
+| `GIT_TOKEN` | `--token <pat>` | Git Personal Access Token | `ghp_...` |
+| `GIT_BRANCH` | `--branch <name>` | Git branch | `main` (default) |
 | `GITHUB_PATH` | `--github-path <path>` | Repo subdirectory (supports `%DATE%`, `%PROJECT%`, `%PERSONAL_PROJECT%`, `%HOSTNAME%`) | `backups/%DATE%/` |
 | **n8n Instance Options** | | | |
 | `N8N_CONTAINER` | `--container <id\|name>` | Docker container | `n8n` (default) |

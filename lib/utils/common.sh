@@ -1618,18 +1618,38 @@ load_config() {
 
     # === GITHUB SETTINGS ===
     # Apply config values to global variables (use config file values if runtime vars not set)
-    if [[ -z "$github_token" && -n "${GITHUB_TOKEN:-}" ]]; then
-        github_token="$GITHUB_TOKEN"
+    if [[ -z "$git_host" ]]; then
+        if [[ -n "${GIT_HOST:-}" ]]; then
+            git_host="$GIT_HOST"
+        else
+            git_host="github.com"
+        fi
     fi
 
-    if [[ -z "$github_repo" && -n "${GITHUB_REPO:-}" ]]; then
-        github_repo="$GITHUB_REPO"
+    if [[ -z "$github_token" ]]; then
+        if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+            github_token="$GITHUB_TOKEN"
+        elif [[ -n "${GIT_TOKEN:-}" ]]; then
+            github_token="$GIT_TOKEN"
+        fi
     fi
 
-    if [[ -z "$github_branch" && -n "${GITHUB_BRANCH:-}" ]]; then
-        github_branch="$GITHUB_BRANCH"
-    else
-        github_branch="${github_branch:-main}"  # Set default if not configured anywhere
+    if [[ -z "$github_repo" ]]; then
+        if [[ -n "${GITHUB_REPO:-}" ]]; then
+            github_repo="$GITHUB_REPO"
+        elif [[ -n "${GIT_REPO:-}" ]]; then
+            github_repo="$GIT_REPO"
+        fi
+    fi
+
+    if [[ -z "$github_branch" ]]; then
+        if [[ -n "${GITHUB_BRANCH:-}" ]]; then
+            github_branch="$GITHUB_BRANCH"
+        elif [[ -n "${GIT_BRANCH:-}" ]]; then
+            github_branch="$GIT_BRANCH"
+        else
+            github_branch="main"  # Set default if not configured anywhere
+        fi
     fi
 
     # === CONTAINER SETTINGS ===
@@ -2228,9 +2248,9 @@ n8n_check_path() {
     local type="${3:-f}" # f for file, d for directory
 
     if [[ -n "$container_id" ]]; then
-        docker exec "$container_id" sh -c "[ -$type '$path' ]"
+        docker exec "$container_id" sh -c "test -$type '$path'"
     else
-        [ -$type "$path" ]
+        test -"$type" "$path"
     fi
 }
 
@@ -2347,6 +2367,24 @@ generate_workflow_manifest() {
         ! -name "credentials.json" \
         -print0 2>/dev/null)
         
-    log DEBUG "Generated manifest with $processed workflows from $source_dir"
+        log DEBUG "Generated manifest with $processed workflows from $source_dir"
     return 0
+}
+
+# Construct the Git remote URL securely from token, repo, and host
+build_git_remote_url() {
+    local token="${1:-${github_token:-}}"
+    local repo="${2:-${github_repo:-}}"
+    local host="${3:-${git_host:-github.com}}"
+
+    if [[ "$repo" =~ ^(https?://|git@) ]]; then
+        printf '%s\n' "$repo"
+        return 0
+    fi
+
+    if [[ -n "$token" ]]; then
+        printf 'https://%s@%s/%s.git\n' "$token" "$host" "$repo"
+    else
+        printf 'https://%s/%s.git\n' "$host" "$repo"
+    fi
 }

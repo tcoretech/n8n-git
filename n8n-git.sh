@@ -90,6 +90,7 @@ n8n_path_source="unset"
 github_token=""
 github_repo=""
 github_branch="main"
+git_host=""
 
 # Storage settings (handled by numeric config)
 workflows=""              # empty = unset, 0=disabled, 1=local, 2=remote
@@ -237,6 +238,7 @@ main() {
             --token) github_token="$2"; shift 2 ;; 
             --repo) github_repo="$2"; shift 2 ;; 
             --branch) github_branch="$2"; shift 2 ;; 
+            --git-host) git_host="$2"; shift 2 ;;
             --config) config_file="$2"; shift 2 ;; 
             --project)
                 if [[ -z "$2" || "$2" == -* ]]; then
@@ -771,14 +773,14 @@ main() {
                     local effective_prefix
                     effective_prefix="$(resolve_repo_base_prefix)"
                     if [[ -n "$effective_prefix" ]]; then
-                        log INFO "GitHub pushes will use existing path prefix: $effective_prefix"
+                        log INFO "Git pushes will use existing path prefix: $effective_prefix"
                     else
-                        log INFO "GitHub pushes will use the repository root."
+                        log INFO "Git pushes will use the repository root."
                     fi
                 fi
             fi
         else
-            log INFO "🏠 Local-only push - no GitHub configuration needed"
+            log INFO "🏠 Local-only push - no Git remote configuration needed"
             github_token=""
             github_repo=""
             github_branch="main"

@@ -74,9 +74,9 @@ show_config_summary() {
     local effective_prefix
     effective_prefix="$(effective_repo_prefix)"
     if [[ -n "$effective_prefix" ]]; then
-        log INFO "  GitHub path: ${value_color}${effective_prefix}${NC}"
+        log INFO "  Git remote path: ${value_color}${effective_prefix}${NC}"
     else
-        log INFO "  GitHub path: ${accent_color}<repository root>${NC}"
+        log INFO "  Git remote path: ${accent_color}<repository root>${NC}"
     fi
 
     if [[ "${n8n_path_source:-default}" != "default" && "${n8n_path_source:-unset}" != "unset" ]]; then
@@ -93,12 +93,12 @@ show_config_summary() {
     fi
     
     if [[ -n "$github_repo" ]]; then
-        log INFO "  GitHub: ${value_color}$github_repo${NC} ${accent_color}(branch: ${github_branch:-main})${NC}"
+        log INFO "  Git Repo: ${value_color}$github_repo${NC} ${accent_color}(branch: ${github_branch:-main})${NC}"
         if [[ -n "$github_token" ]]; then
             local pat_preview="${github_token:0:15}*****"
-            log INFO "  GitHub PAT: ${NORMAL}${pat_preview}${NC}"
+            log INFO "  Git PAT: ${NORMAL}${pat_preview}${NC}"
         else
-            log INFO "  GitHub PAT: ${DIM}<empty>${NC}"
+            log INFO "  Git PAT: ${DIM}<empty>${NC}"
         fi
     fi
 
@@ -545,12 +545,12 @@ get_github_config() {
     local local_repo="$github_repo"
     local local_branch="$github_branch"
 
-    log HEADER "GitHub Configuration"
+    log HEADER "Git Remote Configuration"
 
     # Re-ask for token if not set or in reconfigure mode
     if [[ -z "$local_token" || "$reconfigure_mode" == "true" ]]; then
         while true; do
-            local prompt="Enter GitHub Personal Access Token (PAT)"
+            local prompt="Enter Git Personal Access Token (PAT)"
             if [[ -n "$github_token" && "$reconfigure_mode" == "true" ]]; then
                 local masked
                 masked="$(printf '%s' "$github_token" | sed -E 's/^(.{15}).*/\1xxxx/')"
@@ -564,7 +564,7 @@ get_github_config() {
                 local_token="$github_token"
             fi
             if [ -z "$local_token" ]; then 
-                log ERROR "GitHub token is required."
+                log ERROR "Git token is required."
             else
                 break  # Exit loop once we have a valid token
             fi
@@ -573,7 +573,7 @@ get_github_config() {
 
     # Re-ask for repo if not set or in reconfigure mode
     while [[ -z "$local_repo" ]] || [[ "$reconfigure_mode" == "true" ]]; do
-        local repo_prompt="Enter GitHub repository (format: username/repo)"
+        local repo_prompt="Enter Git repository (format: username/repo)"
         if [[ -n "$github_repo" ]]; then
             repo_prompt="$repo_prompt [${github_repo}]"
         fi
@@ -585,7 +585,7 @@ get_github_config() {
             repo_input="$github_repo"
         fi
         if [ -z "$repo_input" ] || ! echo "$repo_input" | grep -q "/"; then
-            log ERROR "Invalid GitHub repository format. It should be 'username/repo'."
+            log ERROR "Invalid Git repository format. It should be 'username/repo'."
             local_repo=""
             if [[ -n "$github_repo" ]]; then
                 local_repo="$github_repo"

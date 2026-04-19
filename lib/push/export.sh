@@ -474,7 +474,8 @@ push_export() {
 
     if [[ "$git_required" == true ]]; then
         log INFO "Preparing Git repository for push..."
-        local clone_url="https://${github_token}@github.com/${github_repo}.git"
+        local clone_url
+        clone_url=$(build_git_remote_url)
         local -a git_clone_args=("--depth" "1" "-b" "$branch")
         local sparse_requested=false
         local clone_success=false

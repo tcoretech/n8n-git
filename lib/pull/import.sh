@@ -134,7 +134,8 @@ pull_import() {
     if $requires_remote; then
         download_dir=$(mktemp -d -t n8n-download-XXXXXXXXXX)
 
-        local git_repo_url="https://${github_token}@github.com/${github_repo}.git"
+        local git_repo_url
+        git_repo_url=$(build_git_remote_url)
         local sparse_target=""
         if [[ -n "$github_path" ]]; then
             local resolved_path

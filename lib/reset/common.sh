@@ -50,20 +50,7 @@ deactivate_reset_git_env() {
     RESET_PREV_GIT_WORK_TREE=""
 }
 
-build_reset_clone_url() {
-    local repo_value="$1"
 
-    if [[ "$repo_value" =~ ^(https?://|git@) ]]; then
-        printf '%s\n' "$repo_value"
-        return 0
-    fi
-
-    if [[ -n "$github_token" ]]; then
-        printf 'https://%s@github.com/%s.git\n' "$github_token" "$repo_value"
-    else
-        printf 'https://github.com/%s.git\n' "$repo_value"
-    fi
-}
 
 prepare_reset_repository() {
     if [[ -n "$RESET_REPO_PATH" ]]; then
@@ -86,7 +73,7 @@ prepare_reset_repository() {
         fi
 
         local clone_url
-        clone_url=$(build_reset_clone_url "$github_repo")
+        clone_url=$(build_git_remote_url)
         local branch="${github_branch:-main}"
         log INFO "Cloning workflows repository ($github_repo:$branch) for reset"
         if ! git clone --filter=blob:none --branch "$branch" "$clone_url" "$clone_dir" >/dev/null 2>&1; then

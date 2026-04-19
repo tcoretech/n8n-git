@@ -88,7 +88,7 @@ git clone \
   --filter=blob:none \
   --no-checkout \
   --sparse \
-  https://${token}@github.com/${repo}.git \
+  https://${token}@${host}/${repo}.git \
   /tmp/n8n-download-XXXXXX
 
 # Configure sparse checkout
@@ -581,9 +581,9 @@ workflows/Gmail/         Personal/Examples/Gmail/
 ### Required for Remote Pull
 
 ```bash
-GITHUB_TOKEN="ghp_..."          # Personal Access Token (repo scope)
-GITHUB_REPO="user/repo-name"    # Source repository
-GITHUB_BRANCH="main"            # Branch to pull from
+GIT_TOKEN="ghp_..."             # Personal Access Token (repo scope)
+GIT_REPO="user/repo-name"       # Source repository
+GIT_BRANCH="main"               # Branch to pull from
 ```
 
 ### Optional Settings

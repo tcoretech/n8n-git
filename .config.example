@@ -10,18 +10,24 @@
 # This file should be added to .gitignore for security when used locally
 
 # === REQUIRED SETTINGS (for remote operations) ===
-# GitHub Personal Access Token for repository access
-GITHUB_TOKEN="ghp_1234567890abcdef1234567890abcdef12345678"
+# Git Personal Access Token for repository access
+# Aliases: GITHUB_TOKEN
+GIT_TOKEN="ghp_1234567890abcdef1234567890abcdef12345678"
 
-# GitHub repository in format: username/repository  
-GITHUB_REPO="myuser/n8n-backup"
+# Git repository in format: username/repository  
+# Aliases: GITHUB_REPO
+GIT_REPO="myuser/n8n-backup"
 
 # n8n container ID or name to push/pull (defaults to "n8n" if left unset)
 N8N_CONTAINER="n8n-container-name"
 
-# === OPTIONAL GITHUB SETTINGS ===
-# GitHub branch to use (defaults to 'main')
-GITHUB_BRANCH="main"
+# === OPTIONAL GIT SETTINGS ===
+# Git provider host (defaults to 'github.com', e.g. 'gitlab.com' for GitLab)
+GIT_HOST="github.com"
+
+# Git branch to use (defaults to 'main')
+# Aliases: GITHUB_BRANCH
+GIT_BRANCH="main"
 
 # Optional: prefix within the repository where workflows are stored, or retrieved from (e.g., "myvps" or "prod/env")
 # Supports dynamic tokens such as %DATE%, %YYYY%, %YY%, %MM%, %DD%, %HH%, %mm%, %ss%, %HOSTNAME%, %PERSONAL_PROJECT%, and %PROJECT%.
