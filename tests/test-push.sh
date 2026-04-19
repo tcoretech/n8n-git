@@ -383,7 +383,7 @@ fi
 log HEADER "Push Test Summary"
 TEMP_VERIFY=$(testbed_docker exec "$TEST_CONTAINER" mktemp -p /tmp)
 testbed_docker exec "$TEST_CONTAINER" n8n export:workflow --all --output "$TEMP_VERIFY" >/dev/null 2>&1
-WORKFLOW_COUNT=$(testbed_docker exec "$TEST_CONTAINER" jq 'length' "$TEMP_VERIFY")
+WORKFLOW_COUNT=$(testbed_docker exec "$TEST_CONTAINER" cat "$TEMP_VERIFY" | jq 'length' 2>/dev/null || echo "0")
 
 if [ "$WORKFLOW_COUNT" -lt 1 ]; then
     log ERROR "No workflows found after restore"
