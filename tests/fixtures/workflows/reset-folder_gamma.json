@@ -8,7 +8,10 @@
       "name": "Set",
       "type": "n8n-nodes-base.set",
       "typeVersion": 2,
-      "position": [320, 360]
+      "position": [
+        320,
+        360
+      ]
     }
   ],
   "meta": {
@@ -18,5 +21,6 @@
   "active": false,
   "settings": {
     "notes": "Resides inside Teams/Support folder"
-  }
+  },
+  "id": "8960e20e-a4c9-44f8-8bb4-bbd593f36708"
 }
