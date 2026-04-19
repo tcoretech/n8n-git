@@ -5,6 +5,24 @@ All notable changes to n8n Git will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-04-19
+
+### Added
+-  add GitLab support and generic git configuration options
+-  allow "latest" install tag on version
+
+### Fixed
+-  remove redundant 'fi' causing syntax error in interactive.sh
+-  allow passing of specific versions for install
+
+### Maintenance
+- release): bump version to 1.2.3
+
+### Other Changes
+- test: replace docker exec jq with piping cat to jq on host to fix exit code 127 in push-test
+- test: add missing id fields to test workflows to satisfy n8n NOT NULL constraint
+- test: remove output redirection to debug test-push.sh failures
+
 ## [1.2.2] - 2026-01-07
 
 ### Added
