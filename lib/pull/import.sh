@@ -25,6 +25,93 @@ source "$PULL_LIB_DIR/folder-assignment.sh"
 # shellcheck disable=SC1091
 source "$PULL_LIB_DIR/validate.sh"
 
+# Import a single workflow file and immediately organize it into folders
+# Args: workflow_file, container_id, is_dry_run, repo_root, project_id, apply_folder_structure, n8n_path_root
+# Returns: 0 on success, 1 on failure
+process_single_workflow_interleaved() {
+    local workflow_file="$1"
+    local container_id="$2"
+    local is_dry_run="$3"
+    local repo_root="$4"
+    local project_id="$5"
+    local apply_folder_structure="$6"
+    local n8n_path_root="${7:-}"
+    
+    local wf_name
+    local wf_id_in_file
+    
+    # helper to clean up json (handle bom etc)
+    local json_content
+    if [[ -n "$container_id" ]]; then
+        json_content=$(docker exec "$container_id" cat "$workflow_file")
+    else
+        json_content=$(cat "$workflow_file")
+    fi
+    
+    # Extract metadata from JSON
+    wf_name=$(printf '%s' "$json_content" | jq -r '.name // "Unknown"')
+    wf_id_in_file=$(printf '%s' "$json_content" | jq -r '.id // ""')
+    
+    log INFO "Processing workflow: $wf_name"
+    
+    # 1. Start organization logic early (Determine target folder)
+    # We do this logic first to fail fast if folder logic has issues, 
+    # but more importantly to prepare the folder structure.
+    local target_folder_id=""
+    if [[ "$apply_folder_structure" == "true" ]]; then
+        local folder_path
+        # Use existing helper to calculate path from file location
+        folder_path=$(get_workflow_folder_path "$repo_root" "$workflow_file")
+        
+        # Prepend n8n_path_root if configured
+        if [[ -n "$n8n_path_root" ]]; then
+            if [[ -n "$folder_path" ]]; then
+                folder_path="${n8n_path_root%/}/${folder_path}"
+            else
+                folder_path="${n8n_path_root%/}"
+            fi
+        fi
+        
+        # If workflow is not in root (or if n8n_path puts it in a folder), ensure proper structure exists
+        if [[ -n "$folder_path" ]]; then
+             # Create/Get folder ID (cached)
+             if create_folder_path "$project_id" "$folder_path" "$is_dry_run"; then
+                 target_folder_id="$CREATE_FOLDER_LAST_ID"
+             else
+                 log WARN "Failed to ensure folder '$folder_path' exists; workflow will remain unorganized."
+             fi
+        fi
+    fi
+    
+    # 2. Import Workflow
+    local escaped_file
+    escaped_file=$(printf '%q' "$workflow_file")
+    
+    # We use --input to import. 
+    # Important: If the ID in file exists, n8n updates it.
+    # If not, n8n creates it with that ID (usually).
+    if ! n8n_exec "$container_id" "N8N_IMPORT_EXPORT_OVERWRITE=false n8n import:workflow --input=$escaped_file" false; then
+        log ERROR "Failed to import workflow file: $workflow_file"
+        return 1
+    fi
+    
+    # 3. Organize (Assign to Folder)
+    if [[ -n "$target_folder_id" && -n "$wf_id_in_file" ]]; then
+         # We assume the import preserved the ID (standard behavior for 'restore').
+         # If --no-overwrite was used, this ID might be wrong (n8n generated a new one).
+         # For now, we proceed assuming ID match.
+         if assign_workflow_to_folder "$wf_id_in_file" "$project_id" "$target_folder_id" "$is_dry_run" "$wf_name" ""; then
+             : # Success log handled inside function
+         else
+             log WARN "Failed to move workflow '$wf_name' to folder '$folder_path'"
+         fi
+    elif [[ -n "$target_folder_id" && -z "$wf_id_in_file" ]]; then
+         log WARN "Workflow file had no ID; cannot assign to folder '$folder_path' automatically."
+    fi
+    
+    return 0
+}
+
 pull_import() {
     local container_id="$1"
     local github_token="$2"
@@ -356,6 +443,9 @@ pull_import() {
     fi
 
     if [[ "$credentials_mode" == "1" ]]; then
+        # Remove trailing slash from base if present to prevent double dashes in display
+        local display_creds_dir="${local_credentials_dir%/}"
+        
         if [[ -d "$local_credentials_dir" ]]; then
             repo_credentials="$local_credentials_dir"
             repo_credentials_type="directory"
@@ -365,7 +455,12 @@ pull_import() {
             repo_credentials_type="file"
             log INFO "Selected local credentials backup: $repo_credentials"
         else
-            log WARN "No credentials found in local storage ($local_credentials_dir)"
+            # Only warn if credentials were explicitly requested, otherwise just info
+            if [[ "${credentials_source}" == "cli" ]]; then
+                log WARN "No credentials found in local storage ($display_creds_dir)"
+            else
+                log INFO "No credentials found in local storage, skipping."
+            fi
         fi
     fi
 
@@ -445,7 +540,7 @@ pull_import() {
                 fi
             fi
         else
-            log WARN "Credentials artifact unavailable; skipping credential pull."
+            log WARN "Credentials unavailable; skipping credential pull."
             credentials_mode="0"
         fi
     fi
@@ -998,59 +1093,105 @@ pull_import() {
                     import_status="failed"
                 elif [[ "$import_status" != "failed" ]]; then
                     local imported_count=0
+
+                    # Initialize folder cache if needed
+                    local project_id="${N8N_DEFAULT_PROJECT_ID:-}"
+                    if [[ "$apply_folder_structure" == "true" ]]; then
+                        # Ensure API auth is ready for folder caching
+                        if ! prepare_n8n_api_auth "$container_id" ""; then
+                             log WARN "Failed to initialize folder API; folder organization might fail."
+                        fi
+
+                        if [[ -z "$project_id" ]]; then
+                             # Try to fetch default project
+                             local projects_json
+                             if projects_json=$(n8n_api_get_projects); then
+                                 project_id=$(printf '%s' "$projects_json" | jq -r 'if type=="array" then .[0].id else .data[0].id end // empty')
+                             fi
+                        fi
+                        if [[ -n "$project_id" ]]; then
+                             export N8N_DEFAULT_PROJECT_ID="$project_id"
+                             init_folder_cache "$project_id"
+                        else
+                             log WARN "Could not determine default project ID; folder organization may fail."
+                        fi
+                    fi
+
+                    local imported_count=0
                     local failed_count=0
+                    import_status="success"
+                    
+                    # Interleaved Processing: Import & Organize One-by-One
                     for workflow_file in "${container_workflow_files[@]}"; do
                         if [[ -z "$workflow_file" ]]; then
                             continue
                         fi
-                        local wf_name
-                        if [[ -n "$container_id" ]]; then
-                            wf_name=$(docker exec "$container_id" cat "$workflow_file" | jq -r '.name // "Unknown"')
-                        else
-                            wf_name=$(cat "$workflow_file" | jq -r '.name // "Unknown"')
-                        fi
-                        log INFO "Importing workflow: $wf_name"
-                        local escaped_file
-                        escaped_file=$(printf '%q' "$workflow_file")
-                        if ! n8n_exec "$container_id" "N8N_IMPORT_EXPORT_OVERWRITE=false n8n import:workflow --input=$escaped_file" false; then
-                            log ERROR "Failed to import workflow file: $workflow_file"
-                            failed_count=$((failed_count + 1))
-                        else
+                        
+                        # Process the single workflow
+                        # Use container staging path as root for folder calculation
+                        if process_single_workflow_interleaved \
+                            "$workflow_file" \
+                            "$container_id" \
+                            "$is_dry_run" \
+                            "$container_import_workflows" \
+                            "$project_id" \
+                            "$apply_folder_structure" \
+                            "$stage_target_folder"; then
+                            
                             imported_count=$((imported_count + 1))
+                        else
+                            failed_count=$((failed_count + 1))
+                            # Don't fail the whole batch, track status
+                            import_status="partial"
                         fi
                     done
 
                     if (( failed_count > 0 )); then
-                        log ERROR "Failed to import $failed_count workflow file(s) from $container_import_workflows"
-                        import_status="failed"
+                        if (( imported_count > 0 )); then
+                             log WARN "Completed partial import: $imported_count success, $failed_count failed."
+                             import_status="partial"
+                        else
+                             log ERROR "Failed to import all $failed_count workflow file(s) from $container_import_workflows"
+                             import_status="failed"
+                        fi
                     else
                         log SUCCESS "Imported $imported_count workflow file(s)"
+                    fi
+
+                    # Sync directory existence (handles empty folders)
+                    if [[ "$apply_folder_structure" == "true" ]]; then
+                        log INFO "Verifying folder structure..."
+                        local -a container_dirs=()
+                        local find_dir_cmd="find '$container_import_workflows' -mindepth 1 -type d -print 2>/dev/null | sort"
                         
-                        # Capture post-import snapshot to identify newly created workflow IDs
-                        if [[ -n "$existing_workflow_snapshot" && -f "$existing_workflow_snapshot" && -n "$staged_manifest_file" && -f "$staged_manifest_file" ]]; then
-                            local post_import_snapshot=""
-                            SNAPSHOT_EXISTING_WORKFLOWS_PATH=""
-                            if snapshot_existing_workflows "$container_id" "" "$keep_api_session_alive"; then
-                                post_import_snapshot="$SNAPSHOT_EXISTING_WORKFLOWS_PATH"
-                                log DEBUG "Captured post-import workflow snapshot for ID reconciliation"
-                                
-                                # Update manifest with actual imported workflow IDs by comparing snapshots
-                                local updated_manifest
-                                updated_manifest=$(mktemp /tmp/n8n-updated-manifest-XXXXXXXX)
-                                if reconcile_imported_workflow_ids "$existing_workflow_snapshot" "$post_import_snapshot" "$staged_manifest_file" "$updated_manifest"; then
-                                    mv "$updated_manifest" "$staged_manifest_file"
-                                    log INFO "Reconciled manifest with actual imported workflow IDs from n8n"
-                                    summarize_manifest_assignment_status "$staged_manifest_file" "post-import"
-                                else
-                                    rm -f "$updated_manifest"
-                                    log WARN "Unable to reconcile workflow IDs from post-import snapshot; folder assignment may be affected"
-                                fi
-                                
-                                rm -f "$post_import_snapshot"
-                            else
-                                log WARN "Failed to capture post-import snapshot; workflow ID reconciliation skipped"
-                            fi
+                        if [[ -n "$container_id" ]]; then
+                            mapfile -t container_dirs < <(docker exec "$container_id" sh -c "$find_dir_cmd")
+                        else
+                            mapfile -t container_dirs < <(eval "$find_dir_cmd")
                         fi
+                        
+                        local synced_folders=0
+                        for dir_path in "${container_dirs[@]}"; do
+                             [[ -z "$dir_path" ]] && continue
+                             
+                             # Calculate relative path from staging root
+                             local relative_path="${dir_path#"${container_import_workflows}/"}"
+                             
+                             if [[ -n "$relative_path" && "$relative_path" != "$dir_path" ]]; then
+                                 # Apply n8n_path prefix
+                                 local target_path="$relative_path"
+                                 if [[ -n "$stage_target_folder" ]]; then
+                                     target_path="${stage_target_folder%/}/${relative_path}"
+                                 fi
+                                 
+                                 if create_folder_path "$project_id" "$target_path" "$is_dry_run"; then
+                                     synced_folders=$((synced_folders + 1))
+                                 fi
+                             fi
+                        done
+                         if (( synced_folders > 0 )); then
+                            log SUCCESS "Verified/Created $synced_folders folder(s)"
+                         fi
                     fi
                 fi
             else
@@ -1108,7 +1249,23 @@ pull_import() {
         fi
     fi
     
-    if [[ "$workflows_mode" != "0" ]] && $folder_structure_backup && [ "$import_status" != "failed" ] && [[ "$apply_folder_structure" == "true" ]]; then
+    # Attempt folder structure restoration (bulk sync)
+    # UNLESS we are in "file" mode (interleaved), where we have already handled folder organization workflow-by-workflow.
+    # In file/interleaved mode, proceed_with_folders will only trigger if bulk operations are still needed (e.g. empty folders),
+    # but for now we disable it to prevent double-handling and error noise.
+    local proceed_with_folders=false
+    
+    # Only proceed with bulk folder sync if we are NOT in directory/interleaved mode
+    if [[ "$workflow_import_mode" != "directory" ]]; then
+        if [[ "$import_status" != "failed" ]]; then
+             proceed_with_folders=true
+        elif (( imported_count > 0 )); then
+             proceed_with_folders=true
+             log INFO "Proceeding with folder organization for the $imported_count workflow(s) that were successfully imported."
+        fi
+    fi
+
+    if [[ "$workflows_mode" != "0" ]] && $folder_structure_backup && [[ "$proceed_with_folders" == "true" ]] && [[ "$apply_folder_structure" == "true" ]]; then
         local folder_source_dir="$resolved_structured_dir"
         if [[ -z "$folder_source_dir" ]]; then
             folder_source_dir="$structured_workflows_dir"

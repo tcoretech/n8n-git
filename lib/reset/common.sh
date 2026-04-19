@@ -253,10 +253,13 @@ validate_git_state() {
     log DEBUG "Validating Git repository state..."
     
     # Check for uncommitted changes
-    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-        log WARN "Working directory has uncommitted changes"
-        log WARN "Reset will apply Git changes. Consider committing or stashing first."
-        # Not a hard error - user may want to reset anyway
+    # Skip check if we are using a temporary clone (RESET_REPO_CLEANUP_DIR is set)
+    if [[ -z "${RESET_REPO_CLEANUP_DIR:-}" ]]; then
+        if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+            log WARN "Working directory has uncommitted changes"
+            log WARN "Reset will apply Git changes. Consider committing or stashing first."
+            # Not a hard error - user may want to reset anyway
+        fi
     fi
     
     # Check if in detached HEAD state

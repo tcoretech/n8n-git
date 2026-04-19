@@ -298,6 +298,8 @@ stage_directory_workflows_to_container() {
         log ERROR "Invalid source directory: ${source_dir:-<empty>}"
         return 1
     fi
+    # Normalize source dir to remove trailing slash for consistent path subst
+    source_dir="${source_dir%/}"
     
     # Container ID can be empty for local execution
     
@@ -708,7 +710,7 @@ stage_directory_workflows_to_container() {
                   .versionId = $versionId
                   | .version = (if (.version | type) == "object" then (.version + {id: $versionId}) else {id: $versionId} end)
                else . end)
-            | .active = (if (.active | type) == "boolean" then .active else false end)
+            | .active = false
                         | .isArchived = (if (.isArchived | type) == "boolean" then .isArchived else false end)
                         | del(.archived)
                         | (if $finalId == "" then

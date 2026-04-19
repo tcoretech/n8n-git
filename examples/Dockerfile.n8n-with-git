@@ -1,22 +1,23 @@
 # Example Dockerfile: Adding n8n-git to the official n8n image
-# This approach uses a multi-stage build to copy 'apk' from Alpine
-# so that we can install dependencies (git, curl, bash) into the n8n image.
+# This approach uses a multi-stage build to get a static apk binary,
+# which allows us to reinstall apk-tools safely without version mismatch issues.
 
-# Stage 1: Get apk tools from Alpine
+# Stage 1: Get apk-tools-static from Alpine
+# We use the same Alpine version as n8n (currently 3.23) to ensure compatibility
 FROM alpine:3.23 AS builder
+RUN apk add --no-cache apk-tools-static
 
 # Stage 2: Build the final image
 FROM n8nio/n8n:latest
 USER root
 
-# Restore apk from builder
-COPY --from=builder /sbin/apk /sbin/apk
-COPY --from=builder /lib/apk /lib/apk
-COPY --from=builder /etc/apk /etc/apk
-COPY --from=builder /usr/share/apk /usr/share/apk
-COPY --from=builder /usr/lib/libapk.so.3.0.0 /usr/lib/libapk.so.3.0.0
-COPY --from=builder /usr/lib/libssl.so.3 /usr/lib/libssl.so.3
-COPY --from=builder /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so.3
+# Copy the static apk binary
+COPY --from=builder /sbin/apk.static /usr/local/bin/apk.static
+
+# Reinstall apk-tools using the static binary
+# We use the existing system repositories which n8n preserves
+RUN /usr/local/bin/apk.static add --no-cache apk-tools && \
+    rm /usr/local/bin/apk.static
 
 # Install dependencies required by n8n-git
 RUN apk update && apk add --no-cache \

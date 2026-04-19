@@ -157,8 +157,8 @@ check_for_updates() {
     echo "$now $latest" > "$cache_file" 2>/dev/null || true
 
     # Compare versions
-    compare_versions "$current_version" "$latest"
-    local cmp_result=$?
+    local cmp_result=0
+    compare_versions "$current_version" "$latest" || cmp_result=$?
     if ((cmp_result == 2)); then
         UPDATE_AVAILABLE=true
     else
@@ -346,7 +346,8 @@ perform_update() {
     # Create temporary directory
     local workdir
     workdir=$(mktemp -d)
-    trap 'rm -rf "$workdir"' EXIT
+    # shellcheck disable=SC2064 # We want to expand workdir now because it is local
+    trap "rm -rf \"$workdir\"" EXIT
 
     # Download the release
     local archive_url="https://github.com/${N8N_GIT_REPO}/archive/refs/tags/${source_ref}.tar.gz"

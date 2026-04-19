@@ -31,8 +31,36 @@ SHAREDIR="${SHAREDIR:-$PREFIX/share/n8n-git}"
 LIB_DEST="${LIB_DEST:-$SHAREDIR/lib}"
 SCRIPT_DEST="$BINDIR/$INSTALL_NAME"
 
-SOURCE_REF="${N8N_GIT_SOURCE_REF:-main}"
-ARCHIVE_URL="${N8N_GIT_SOURCE_URL:-https://github.com/tcoretech/n8n-git/archive/refs/heads/${SOURCE_REF}.tar.gz}"
+# ------------------------------------------------------------
+# Version Resolution Logic
+# ------------------------------------------------------------
+
+# 1. Accept external version override
+if [ -n "${VERSION:-}" ]; then
+    SOURCE_REF="${VERSION}"
+else
+    SOURCE_REF="${N8N_GIT_SOURCE_REF:-main}"
+fi
+
+# 2. Resolve 'latest' to actual git tag via GitHub API
+if [ "$SOURCE_REF" = "latest" ]; then
+    log INFO "Resolving latest version tag..."
+    LATEST_TAG=$(curl -s https://api.github.com/repos/tcoretech/n8n-git/releases/latest | grep '"tag_name":' | head -n 1 | cut -d '"' -f 4)
+
+    if [ -n "$LATEST_TAG" ]; then
+        SOURCE_REF="$LATEST_TAG"
+        log INFO "Resolved 'latest' to: $SOURCE_REF"
+    else
+        log ERROR "Failed to resolve 'latest' version. Check internet connection or API limits."
+        exit 1
+    fi
+fi
+
+# 3. Construct Archive URL (works for both tags and branches)
+# GitHub supports /archive/<ref>.tar.gz for both tags (v1.0.0) and branches (main)
+ARCHIVE_URL="${N8N_GIT_SOURCE_URL:-https://github.com/tcoretech/n8n-git/archive/${SOURCE_REF}.tar.gz}"
+
+# ------------------------------------------------------------
 
 log INFO "n8n-git installer"
 log INFO "Installing binary to $SCRIPT_DEST"
