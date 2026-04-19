@@ -92,7 +92,6 @@ show_config_summary() {
             log INFO "  Git remote path: ${accent_color}<repository root>${NC}"
         fi
     fi
-    fi
 
     if [[ "${n8n_path_source:-default}" != "default" && "${n8n_path_source:-unset}" != "unset" ]]; then
         if [[ -n "$n8n_path" ]]; then
