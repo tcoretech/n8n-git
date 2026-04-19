@@ -171,8 +171,9 @@ TEMP_WORKFLOW=$(testbed_docker exec "$TEST_CONTAINER" mktemp -p /tmp)
 testbed_docker exec "$TEST_CONTAINER" sh -c "cat <<'EOF' > $TEMP_WORKFLOW
 $TEST_WORKFLOW
 EOF"
-testbed_docker exec "$TEST_CONTAINER" n8n import:workflow --input "$TEMP_WORKFLOW" >/dev/null 2>&1 || {
+testbed_docker exec "$TEST_CONTAINER" n8n import:workflow --input "$TEMP_WORKFLOW" >"$TEST_PUSH_DIR/import.log" 2>&1 || {
     log ERROR "Failed to import test workflow"
+    cat "$TEST_PUSH_DIR/import.log"
     exit 1
 }
 log INFO "Test workflow created"
@@ -185,8 +186,9 @@ TEMP_CREDENTIAL=$(testbed_docker exec "$TEST_CONTAINER" mktemp -p /tmp)
 testbed_docker exec "$TEST_CONTAINER" sh -c "cat <<'EOF' > $TEMP_CREDENTIAL
 $TEST_CREDENTIAL
 EOF"
-testbed_docker exec "$TEST_CONTAINER" n8n import:credentials --input "$TEMP_CREDENTIAL" --decrypted >/dev/null || {
+testbed_docker exec "$TEST_CONTAINER" n8n import:credentials --input "$TEMP_CREDENTIAL" --decrypted >"$TEST_PUSH_DIR/import_cred.log" 2>&1 || {
     log ERROR "Failed to import test credential"
+    cat "$TEST_PUSH_DIR/import_cred.log"
     exit 1
 }
 log INFO "Test credential created"
